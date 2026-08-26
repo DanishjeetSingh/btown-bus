@@ -30,6 +30,8 @@ Then open `http://localhost:3000`. With the development server running, verify b
 npm run validate:live
 ```
 
+On iPhone or iPad, open `https://btb.singhdan.me` in Safari, tap Share, and choose **Add to Home Screen**. The installed app uses a dedicated home-screen icon, opens without Safari chrome, respects the device safe area, and keeps an offline shell while never caching live transit API responses.
+
 Production checks:
 
 ```bash
