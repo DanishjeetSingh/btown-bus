@@ -51,10 +51,10 @@ export async function getIuSnapshot(): Promise<TransitSnapshot> {
     color: normalizeColor(route.color, '#990000'), textColor: '#ffffff',
     paths: route.encLine ? [decodePolyline(route.encLine)] : [],
   }));
-  const stops: TransitStop[] = stopData.get_stops.map((stop) => ({
-    agency: 'iu', id: String(stop.id), name: stop.name, lat: stop.lat, lng: stop.lng,
+  const stops: TransitStop[] = [...new Map(stopData.get_stops.map((stop) => [String(stop.id), {
+    agency: 'iu' as const, id: String(stop.id), name: stop.name, lat: stop.lat, lng: stop.lng,
     routeIds: stopRoutes.get(String(stop.id)) ?? [],
-  }));
+  }])).values()];
   const vehicles: TransitVehicle[] = vehicleData.get_vehicles
     .filter((vehicle) => vehicle.inService !== 0 && vehicle.lat !== 0 && vehicle.lng !== 0)
     .map((vehicle) => ({
