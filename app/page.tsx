@@ -2,6 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { getClientArrivals, getClientSnapshot } from '@/src/transit/client';
 import type { TransitArrival, TransitRoute, TransitSnapshot, TransitStop } from '@/src/transit/types';
 
 const TransitMap = dynamic(() => import('./components/TransitMap'), { ssr: false, loading: () => <div className="map-loading"><span />Loading live map…</div> });
@@ -22,9 +23,7 @@ export default function Home() {
 
   const loadSnapshot = useCallback(async () => {
     try {
-      const response = await fetch('/api/transit');
-      if (!response.ok) throw new Error('Transit data is temporarily unavailable');
-      const next: TransitSnapshot = await response.json();
+      const next = await getClientSnapshot();
       setSnapshot(next);
       setActiveRoutes((current) => current.size ? current : new Set(next.routes.map((route) => routeKey(route.agency, route.id))));
     } catch { setSnapshot((current) => current ?? { routes: [], stops: [], vehicles: [], alerts: [], sources: [{ agency: 'bt', ok: false, updatedAt: Date.now() }, { agency: 'iu', ok: false, updatedAt: Date.now() }], generatedAt: Date.now() }); }
@@ -66,15 +65,14 @@ export default function Home() {
     let cancelled = false;
     const load = async () => {
       try {
-        const response = await fetch(`/api/arrivals?stops=${encodeURIComponent(requestedKey)}`);
-        const data = await response.json();
-        if (!cancelled) setArrivals(data.arrivals ?? []);
+        const next = await getClientArrivals(requestedStops.map((stop) => ({ agency: stop.agency, id: stop.id })));
+        if (!cancelled) setArrivals(next);
       } catch { if (!cancelled) setArrivals([]); }
     };
     load();
     const timer = setInterval(load, 25_000);
     return () => { cancelled = true; clearInterval(timer); };
-  }, [requestedKey]);
+  }, [requestedKey, requestedStops]);
 
   const locate = () => {
     setLocationError('');

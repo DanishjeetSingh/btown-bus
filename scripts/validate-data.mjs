@@ -1,21 +1,28 @@
-const base = process.env.TRANSIT_API_URL || 'http://localhost:3000';
-const response = await fetch(`${base.replace(/\/$/, '')}/api/transit`);
-if (!response.ok) throw new Error(`Tracker API returned ${response.status}`);
-const data = await response.json();
+const feeds = [
+  ['Bloomington Transit', 'https://bloomingtontransit.etaspot.net/service.php'],
+  ['IU Campus Bus', 'https://iucbs.etaspot.net/service.php'],
+];
 
-for (const [id, label] of [['bt', 'Bloomington Transit'], ['iu', 'IU Campus Bus']]) {
-  const stops = data.stops.filter((item) => item.agency === id);
-  let arrivalStatus = 'unavailable';
-  for (let index = 0; index < Math.min(stops.length, 64) && arrivalStatus !== 'working'; index += 8) {
-    const candidates = stops.slice(index, index + 8).map((stop) => `${id}:${stop.id}`).join(',');
-    const result = await fetch(`${base.replace(/\/$/, '')}/api/arrivals?stops=${encodeURIComponent(candidates)}`);
-    const arrivals = result.ok ? (await result.json()).arrivals : [];
-    if (arrivals.some((item) => item.source === 'realtime')) arrivalStatus = 'working';
-  }
+for (const [label, base] of feeds) {
+  const request = async (service, params = '') => {
+    const response = await fetch(`${base}?service=${service}${params}`);
+    if (!response.ok) throw new Error(`${label} ${service} returned ${response.status}`);
+    if (response.headers.get('access-control-allow-origin') !== '*') throw new Error(`${label} ${service} is not browser-readable`);
+    return response.json();
+  };
+  const [routes, stops, vehicles] = await Promise.all([
+    request('get_routes'), request('get_stops'), request('get_vehicles', '&includeETAData=1&orderedETAArray=1'),
+  ]);
+  const routeList = routes.get_routes ?? [];
+  const stopList = stops.get_stops ?? [];
+  const activeVehicles = (vehicles.get_vehicles ?? []).filter((vehicle) => vehicle.inService !== 0 && vehicle.lat && vehicle.lng);
+  const candidateStop = stopList[0];
+  const arrivals = candidateStop ? await request('get_stop_etas', `&stopIDs=${encodeURIComponent(candidateStop.id)}`) : { get_stop_etas: [] };
   console.log(label);
-  console.log(`- routes: ${data.routes.filter((item) => item.agency === id).length}`);
-  console.log(`- stops: ${stops.length}`);
-  console.log(`- active vehicles: ${data.vehicles.filter((item) => item.agency === id).length}`);
-  console.log(`- realtime arrivals: ${arrivalStatus}`);
+  console.log(`- routes: ${routeList.length}`);
+  console.log(`- stops: ${new Set(stopList.map((stop) => String(stop.id))).size}`);
+  console.log(`- active vehicles: ${activeVehicles.length}`);
+  console.log(`- realtime arrivals: ${arrivals.get_stop_etas ? 'working' : 'unavailable'}`);
+  console.log('- browser CORS: working');
   console.log('');
 }

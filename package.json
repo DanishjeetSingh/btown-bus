@@ -6,16 +6,13 @@
     "node": ">=22.13.0"
   },
   "scripts": {
-    "dev": "vinext dev",
-    "build": "vinext build",
-    "start": "vinext start",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "npx serve out",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "validate:live": "node scripts/validate-data.mjs"
   },
   "dependencies": {
-    "csv-parse": "^7.0.2",
-    "fflate": "^0.8.3",
-    "gtfs-realtime-bindings": "^2.2.0",
     "leaflet": "^1.9.4",
     "next": "16.2.6",
     "react": "19.2.6",
