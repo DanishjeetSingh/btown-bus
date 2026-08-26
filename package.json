@@ -10,7 +10,7 @@
     "dev": "npm run prepare:map && next dev",
     "build": "npm run prepare:map && next build",
     "start": "npx serve out",
-    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
+    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern public/maplibre-gl-worker.mjs --ignore-pattern public/maplibre-gl-shared.mjs",
     "validate:live": "node scripts/validate-data.mjs"
   },
   "dependencies": {

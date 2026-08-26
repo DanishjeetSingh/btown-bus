@@ -1,4 +1,4 @@
-const CACHE = 'btown-bus-v2';
+const CACHE = 'btown-bus-v3';
 const SHELL = ['/', '/manifest.json', '/icon-192.png', '/icon-512.png', '/apple-touch-icon.png'];
 
 self.addEventListener('install', (event) => {
@@ -18,5 +18,15 @@ self.addEventListener('fetch', (event) => {
       caches.open(CACHE).then((cache) => cache.put('/', copy));
       return response;
     }).catch(() => caches.match('/')));
+    return;
   }
+
+  if (!['script', 'style', 'font', 'image', 'worker'].includes(event.request.destination)) return;
+  event.respondWith(caches.match(event.request).then((cached) => {
+    const network = fetch(event.request).then((response) => {
+      if (response.ok) caches.open(CACHE).then((cache) => cache.put(event.request, response.clone()));
+      return response;
+    });
+    return cached || network;
+  }));
 });

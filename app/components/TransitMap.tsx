@@ -15,17 +15,19 @@ type Props = {
   vehicles: TransitVehicle[];
   activeRoutes: Set<string>;
   position?: [number, number];
+  expanded: boolean;
   onSelectStop: (stop: TransitStop) => void;
 };
 
 const key = (agency: string, id: string) => `${agency}:${id}`;
 
-export default function TransitMap({ routes, stops, vehicles, activeRoutes, position, onSelectStop }: Props) {
+export default function TransitMap({ routes, stops, vehicles, activeRoutes, position, expanded, onSelectStop }: Props) {
   const routeMap = useMemo(() => new Map(routes.map((route) => [key(route.agency, route.id), route])), [routes]);
   const visible = (agency: string, routeId?: string) => Boolean(routeId && activeRoutes.has(key(agency, routeId)));
   return (
     <MapContainer center={[39.1699, -86.5258]} zoom={14} scrollWheelZoom className="transit-map" zoomControl={false}>
       <SimpleBasemap />
+      <ResizeMap expanded={expanded} />
       <Recenter position={position} />
       {routes.filter((route) => activeRoutes.has(key(route.agency, route.id))).flatMap((route) =>
         (route.paths ?? []).map((path, index) => <Polyline key={`${key(route.agency, route.id)}:${index}`} positions={path} pathOptions={{ color: route.color || '#315b50', weight: 4, opacity: .72 }} />))}
@@ -43,6 +45,15 @@ export default function TransitMap({ routes, stops, vehicles, activeRoutes, posi
       {position && <CircleMarker center={position} radius={8} pathOptions={{ color: '#fff', fillColor: '#cf3a26', fillOpacity: 1, weight: 3 }} />}
     </MapContainer>
   );
+}
+
+function ResizeMap({ expanded }: { expanded: boolean }) {
+  const map = useMap();
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => map.invalidateSize({ pan: false }));
+    return () => cancelAnimationFrame(frame);
+  }, [expanded, map]);
+  return null;
 }
 
 function SimpleBasemap() {

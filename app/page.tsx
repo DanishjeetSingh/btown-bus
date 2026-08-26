@@ -20,6 +20,7 @@ export default function Home() {
   const [activeRoutes, setActiveRoutes] = useState<Set<string>>(new Set());
   const [routePreferencesReady, setRoutePreferencesReady] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [sheetCollapsed, setSheetCollapsed] = useState(false);
   const [favoriteKeys, setFavoriteKeys] = useState<Set<string>>(new Set());
   const [now, setClock] = useState(() => Date.now());
 
@@ -157,14 +158,19 @@ export default function Home() {
       {locationError && <div className="toast" role="status">{locationError}<button onClick={() => setLocationError('')} aria-label="Dismiss">×</button></div>}
       {snapshot?.alerts[0] && <div className="alert-strip"><b>Service alert</b><span>{snapshot.alerts[0].title || snapshot.alerts[0].description}</span></div>}
 
-      <section className="map-stage" aria-label="Live Bloomington transit map">
-        {snapshot ? <TransitMap routes={snapshot.routes} stops={snapshot.stops} vehicles={snapshot.vehicles} activeRoutes={activeRoutes} position={position} onSelectStop={setSelectedStop} /> : <div className="map-loading"><span />Loading live map…</div>}
+      <section className={`map-stage ${sheetCollapsed ? 'expanded' : ''}`} aria-label="Live Bloomington transit map">
+        {snapshot ? <TransitMap routes={snapshot.routes} stops={snapshot.stops} vehicles={snapshot.vehicles} activeRoutes={activeRoutes} position={position} expanded={sheetCollapsed} onSelectStop={(stop) => { setSelectedStop(stop); setSheetCollapsed(false); }} /> : <div className="map-loading"><span />Loading live map…</div>}
         <div className="map-status"><span className={overallOk ? 'status-dot live' : 'status-dot unavailable'} />{overallOk ? selectedRouteCount ? `${visibleVehicleCount} buses on selected routes` : 'Choose routes to begin' : 'Feeds unavailable'}</div>
         <div className="map-key"><span><i className="iu-dot" /> IU</span><span><i className="bt-dot" /> BT</span></div>
       </section>
 
-      <section className="arrival-sheet">
-        <div className="sheet-handle" />
+      <section className={`arrival-sheet ${sheetCollapsed ? 'collapsed' : ''}`}>
+        <button className="sheet-toggle" type="button" aria-expanded={!sheetCollapsed} aria-controls="arrival-sheet-body" aria-label={sheetCollapsed ? 'Expand nearby arrivals' : 'Collapse nearby arrivals'} onClick={() => setSheetCollapsed((current) => !current)}>
+          <span className="sheet-handle" />
+          {sheetCollapsed && <span className="sheet-collapsed-label">Nearby arrivals</span>}
+          <span className="sheet-toggle-icon" aria-hidden="true">{sheetCollapsed ? '⌃' : '⌄'}</span>
+        </button>
+        {!sheetCollapsed && <div className="sheet-body" id="arrival-sheet-body">
         <div className="sheet-heading">
           <div><p className="eyebrow">{selectedStop ? `${selectedStop.agency === 'iu' ? 'IU Campus Bus' : 'Bloomington Transit'} stop` : position ? 'Closest to you' : 'Closest to downtown'}</p><h1>{selectedStop?.name || 'Nearby arrivals'}</h1>{selectedStop && selectedDistance != null && <p className="walk-note">{formatDistance(selectedDistance)} away · ~{Math.max(1, Math.ceil(selectedDistance / 81))} min walk</p>}</div>
           {selectedStop ? <button className={`favorite ${favoriteKeys.has(stopKey(selectedStop)) ? 'saved' : ''}`} type="button" onClick={() => toggleFavorite(selectedStop)} aria-label="Favorite this stop">★</button> : <span className={`live-pill ${overallOk ? '' : 'offline'}`}><i />{overallOk ? 'Live now' : 'Unavailable'}</span>}
@@ -175,7 +181,7 @@ export default function Home() {
             const route = routeMap.get(routeKey(arrival.agency, arrival.routeId));
             const stop = snapshot?.stops.find((item) => item.agency === arrival.agency && item.id === arrival.stopId);
             const minutes = Math.max(0, Math.ceil((arrival.predictedArrival - now) / 60_000));
-            return <button className="arrival-card" type="button" key={`${arrival.agency}:${arrival.tripId || arrival.vehicleId || index}:${arrival.stopId}`} onClick={() => stop && setSelectedStop(stop)}>
+            return <button className="arrival-card" type="button" key={`${arrival.agency}:${arrival.tripId || arrival.vehicleId || index}:${arrival.stopId}`} onClick={() => { if (stop) { setSelectedStop(stop); setSheetCollapsed(false); } }}>
               <span className="route-badge" style={{ backgroundColor: route?.color || (arrival.agency === 'iu' ? '#990000' : '#006298'), color: route?.textColor || '#fff' }}>{route?.shortName || arrival.routeId}</span>
               <span className="arrival-copy"><strong>{selectedStop ? (arrival.destination || route?.longName || 'Direction unavailable') : (stop?.name || 'Nearby stop')}</strong><span>{arrival.agency.toUpperCase()} · {arrival.destination || route?.longName || 'Direction unavailable'}</span></span>
               <span className="arrival-time"><strong>{minutes}</strong><small>min</small><em className={arrival.freshness}>{arrival.freshness}</em></span>
@@ -184,6 +190,7 @@ export default function Home() {
         </div>
         {selectedStop && <button className="back-button" type="button" onClick={() => setSelectedStop(undefined)}>← Back to nearby stops</button>}
         <p className="disclaimer">Independent third-party tracker · Not affiliated with Bloomington Transit or Indiana University · Arrival times may change</p>
+        </div>}
       </section>
     </main>
   );
