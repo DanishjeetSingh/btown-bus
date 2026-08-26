@@ -6,14 +6,17 @@
     "node": ">=22.13.0"
   },
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "prepare:map": "node scripts/prepare-maplibre.mjs",
+    "dev": "npm run prepare:map && next dev",
+    "build": "npm run prepare:map && next build",
     "start": "npx serve out",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "validate:live": "node scripts/validate-data.mjs"
   },
   "dependencies": {
+    "@maplibre/maplibre-gl-leaflet": "^0.1.4",
     "leaflet": "^1.9.4",
+    "maplibre-gl": "^6.6.0",
     "next": "16.2.6",
     "react": "19.2.6",
     "react-dom": "19.2.6",

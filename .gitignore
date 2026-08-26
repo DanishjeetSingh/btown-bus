@@ -36,3 +36,5 @@ next-env.d.ts
 /.wrangler/
 /outputs/
 /work/
+/public/maplibre-gl-worker.mjs
+/public/maplibre-gl-shared.mjs

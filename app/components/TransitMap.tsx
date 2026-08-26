@@ -2,8 +2,11 @@
 
 import { useEffect, useMemo } from 'react';
 import L from 'leaflet';
-import { CircleMarker, MapContainer, Marker, Polyline, Popup, TileLayer, useMap } from 'react-leaflet';
+import { maplibreGL } from '@maplibre/maplibre-gl-leaflet';
+import { setWorkerUrl } from 'maplibre-gl';
+import { CircleMarker, MapContainer, Marker, Polyline, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import type { TransitRoute, TransitStop, TransitVehicle } from '@/src/transit/types';
 
 type Props = {
@@ -22,7 +25,7 @@ export default function TransitMap({ routes, stops, vehicles, activeRoutes, posi
   const visible = (agency: string, routeId?: string) => Boolean(routeId && activeRoutes.has(key(agency, routeId)));
   return (
     <MapContainer center={[39.1699, -86.5258]} zoom={14} scrollWheelZoom className="transit-map" zoomControl={false}>
-      <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+      <SimpleBasemap />
       <Recenter position={position} />
       {routes.filter((route) => activeRoutes.has(key(route.agency, route.id))).flatMap((route) =>
         (route.paths ?? []).map((path, index) => <Polyline key={`${key(route.agency, route.id)}:${index}`} positions={path} pathOptions={{ color: route.color || '#315b50', weight: 4, opacity: .72 }} />))}
@@ -40,6 +43,25 @@ export default function TransitMap({ routes, stops, vehicles, activeRoutes, posi
       {position && <CircleMarker center={position} radius={8} pathOptions={{ color: '#fff', fillColor: '#cf3a26', fillOpacity: 1, weight: 3 }} />}
     </MapContainer>
   );
+}
+
+function SimpleBasemap() {
+  const map = useMap();
+  useEffect(() => {
+    setWorkerUrl('/maplibre-gl-worker.mjs');
+    const attribution = '<a href="https://openfreemap.org/">OpenFreeMap</a> © <a href="https://openmaptiles.org/">OpenMapTiles</a> Data from <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+    const layer = maplibreGL({
+      style: 'https://tiles.openfreemap.org/styles/positron',
+      attributionControl: false,
+    }).addTo(map);
+    map.attributionControl.addAttribution(attribution);
+
+    return () => {
+      map.attributionControl.removeAttribution(attribution);
+      map.removeLayer(layer);
+    };
+  }, [map]);
+  return null;
 }
 
 function Recenter({ position }: { position?: [number, number] }) {
