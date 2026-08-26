@@ -38,5 +38,5 @@ export const metadata: Metadata = {
 export const viewport: Viewport = { width: 'device-width', initialScale: 1, viewportFit: 'cover', themeColor: '#14221e' };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en"><body className={`${geistSans.variable} ${geistMono.variable}`}><InstallSupport />{children}</body></html>;
+  return <html lang="en"><head><meta name="apple-mobile-web-app-capable" content="yes" /></head><body className={`${geistSans.variable} ${geistMono.variable}`}><InstallSupport />{children}</body></html>;
 }
