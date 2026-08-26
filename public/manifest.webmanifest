@@ -1,0 +1,9 @@
+{
+  "name": "B-Town Bus — Bloomington + IU Bus Tracker",
+  "short_name": "B-Town Bus",
+  "description": "Live Bloomington Transit and IU Campus Bus arrivals in one independent tracker.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4efe4",
+  "theme_color": "#14221e"
+}

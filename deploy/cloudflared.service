@@ -1,0 +1,13 @@
+[Unit]
+Description=Cloudflare Tunnel for singhdan.me services
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/u/singhdan/.local/bin/cloudflared tunnel --config /u/singhdan/.cloudflared/config.yml run
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
