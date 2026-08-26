@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   title: 'B-Town Bus — Bloomington + IU Bus Tracker',
   description: 'Live Bloomington Transit and IU Campus Bus arrivals, vehicles, routes, and nearby stops in one independent tracker.',
   applicationName: 'B-Town Bus',
-  manifest: '/manifest.webmanifest',
+  manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     title: 'B-Town Bus',
