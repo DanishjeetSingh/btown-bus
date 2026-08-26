@@ -19,14 +19,14 @@ const key = (agency: string, id: string) => `${agency}:${id}`;
 
 export default function TransitMap({ routes, stops, vehicles, activeRoutes, position, onSelectStop }: Props) {
   const routeMap = useMemo(() => new Map(routes.map((route) => [key(route.agency, route.id), route])), [routes]);
-  const visible = (agency: string, routeId?: string) => !routeId || activeRoutes.has(key(agency, routeId));
+  const visible = (agency: string, routeId?: string) => Boolean(routeId && activeRoutes.has(key(agency, routeId)));
   return (
     <MapContainer center={[39.1699, -86.5258]} zoom={14} scrollWheelZoom className="transit-map" zoomControl={false}>
       <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
       <Recenter position={position} />
       {routes.filter((route) => activeRoutes.has(key(route.agency, route.id))).flatMap((route) =>
         (route.paths ?? []).map((path, index) => <Polyline key={`${key(route.agency, route.id)}:${index}`} positions={path} pathOptions={{ color: route.color || '#315b50', weight: 4, opacity: .72 }} />))}
-      {stops.filter((stop) => !stop.routeIds?.length || stop.routeIds.some((id) => activeRoutes.has(key(stop.agency, id)))).map((stop) => (
+      {stops.filter((stop) => stop.routeIds?.some((id) => activeRoutes.has(key(stop.agency, id)))).map((stop) => (
         <CircleMarker key={key(stop.agency, stop.id)} center={[stop.lat, stop.lng]} radius={4} pathOptions={{ color: stop.agency === 'iu' ? '#990000' : '#006298', fillColor: '#fffdf7', fillOpacity: 1, weight: 2 }} eventHandlers={{ click: () => onSelectStop(stop) }}>
           <Popup><button className="popup-stop" type="button" onClick={() => onSelectStop(stop)}><strong>{stop.name}</strong><span>{stop.agency === 'iu' ? 'IU Campus Bus' : 'Bloomington Transit'} arrivals</span></button></Popup>
         </CircleMarker>

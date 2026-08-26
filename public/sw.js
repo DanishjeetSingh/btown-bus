@@ -1,4 +1,4 @@
-const CACHE = 'btown-bus-v1';
+const CACHE = 'btown-bus-v2';
 const SHELL = ['/', '/manifest.json', '/icon-192.png', '/icon-512.png', '/apple-touch-icon.png'];
 
 self.addEventListener('install', (event) => {

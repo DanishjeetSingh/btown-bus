@@ -7,6 +7,7 @@ import type { TransitArrival, TransitRoute, TransitSnapshot, TransitStop } from 
 
 const TransitMap = dynamic(() => import('./components/TransitMap'), { ssr: false, loading: () => <div className="map-loading"><span />Loading live map…</div> });
 const DEFAULT_POSITION: [number, number] = [39.1699, -86.5258];
+const ROUTE_PREFERENCES_KEY = 'btown-bus-route-preferences-v1';
 const routeKey = (agency: string, id: string) => `${agency}:${id}`;
 const stopKey = (stop: TransitStop) => `${stop.agency}:${stop.id}`;
 
@@ -17,6 +18,7 @@ export default function Home() {
   const [selectedStop, setSelectedStop] = useState<TransitStop>();
   const [arrivals, setArrivals] = useState<TransitArrival[]>([]);
   const [activeRoutes, setActiveRoutes] = useState<Set<string>>(new Set());
+  const [routePreferencesReady, setRoutePreferencesReady] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [favoriteKeys, setFavoriteKeys] = useState<Set<string>>(new Set());
   const [now, setClock] = useState(() => Date.now());
@@ -25,11 +27,30 @@ export default function Home() {
     try {
       const next = await getClientSnapshot();
       setSnapshot(next);
-      setActiveRoutes((current) => current.size ? current : new Set(next.routes.map((route) => routeKey(route.agency, route.id))));
     } catch { setSnapshot((current) => current ?? { routes: [], stops: [], vehicles: [], alerts: [], sources: [{ agency: 'bt', ok: false, updatedAt: Date.now() }, { agency: 'iu', ok: false, updatedAt: Date.now() }], generatedAt: Date.now() }); }
   }, []);
 
   useEffect(() => {
+    const timer = setTimeout(() => {
+      let hasSavedPreference = false;
+      try {
+        const stored = localStorage.getItem(ROUTE_PREFERENCES_KEY);
+        if (stored !== null) {
+          const parsed: unknown = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.every((item) => typeof item === 'string')) {
+            setActiveRoutes(new Set(parsed));
+            hasSavedPreference = true;
+          }
+        }
+      } catch { /* ignore damaged local preference */ }
+      if (!hasSavedPreference) setFiltersOpen(true);
+      setRoutePreferencesReady(true);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!routePreferencesReady) return;
     const initial = setTimeout(loadSnapshot, 0);
     let failures = 0;
     let timer: ReturnType<typeof setTimeout>;
@@ -41,7 +62,7 @@ export default function Home() {
     };
     timer = setTimeout(poll, 15_000);
     return () => { clearTimeout(initial); clearTimeout(timer); };
-  }, [loadSnapshot]);
+  }, [loadSnapshot, routePreferencesReady]);
 
   useEffect(() => {
     const initial = setTimeout(() => {
@@ -86,21 +107,33 @@ export default function Home() {
 
   const routeMap = useMemo(() => new Map((snapshot?.routes ?? []).map((route) => [routeKey(route.agency, route.id), route])), [snapshot?.routes]);
   const displayArrivals = arrivals.filter((arrival) => activeRoutes.has(routeKey(arrival.agency, arrival.routeId))).slice(0, selectedStop ? 8 : 6);
+  const selectedRouteCount = (snapshot?.routes ?? []).filter((route) => activeRoutes.has(routeKey(route.agency, route.id))).length;
+  const visibleVehicleCount = (snapshot?.vehicles ?? []).filter((vehicle) => vehicle.routeId && activeRoutes.has(routeKey(vehicle.agency, vehicle.routeId))).length;
   const selectedDistance = selectedStop ? distanceMeters(origin, [selectedStop.lat, selectedStop.lng]) : undefined;
   const firstArrival = displayArrivals[0];
   const leaveText = firstArrival && selectedDistance != null ? getLeaveText(firstArrival.predictedArrival, selectedDistance, now) : undefined;
   const overallOk = snapshot?.sources.some((source) => source.ok);
 
-  const toggleAgency = (agency: 'bt' | 'iu') => setActiveRoutes((current) => {
+  const updateActiveRoutes = (update: (current: Set<string>) => Set<string>) => setActiveRoutes((current) => {
+    const next = update(current);
+    try { localStorage.setItem(ROUTE_PREFERENCES_KEY, JSON.stringify([...next])); } catch { /* storage can be unavailable in private browsing */ }
+    return next;
+  });
+  const toggleAgency = (agency: 'bt' | 'iu') => updateActiveRoutes((current) => {
     const next = new Set(current);
     const agencyKeys = (snapshot?.routes ?? []).filter((route) => route.agency === agency).map((route) => routeKey(route.agency, route.id));
     const turnOn = agencyKeys.some((item) => !next.has(item));
     agencyKeys.forEach((item) => { if (turnOn) next.add(item); else next.delete(item); });
     return next;
   });
-  const toggleRoute = (route: TransitRoute) => setActiveRoutes((current) => {
+  const toggleRoute = (route: TransitRoute) => updateActiveRoutes((current) => {
     const next = new Set(current); const item = routeKey(route.agency, route.id); if (next.has(item)) next.delete(item); else next.add(item); return next;
   });
+  const clearRoutes = () => updateActiveRoutes(() => new Set());
+  const agencyButtonLabel = (agency: 'bt' | 'iu', name: string) => {
+    const keys = (snapshot?.routes ?? []).filter((route) => route.agency === agency).map((route) => routeKey(route.agency, route.id));
+    return `${keys.length > 0 && keys.every((item) => activeRoutes.has(item)) ? 'Clear' : 'Select all'} ${name}`;
+  };
   const toggleFavorite = (stop: TransitStop) => {
     const next = new Set(favoriteKeys); const item = stopKey(stop); if (next.has(item)) next.delete(item); else next.add(item);
     setFavoriteKeys(next); localStorage.setItem('btown-bus-favorites', JSON.stringify([...next]));
@@ -111,21 +144,22 @@ export default function Home() {
       <header className="topbar">
         <a className="brand" href="#" onClick={() => setSelectedStop(undefined)} aria-label="B-Town Bus home"><span className="brand-mark">B</span><span><strong>B-Town Bus</strong><small>Bloomington + IU</small></span></a>
         <div className="header-actions">
-          <button className="filter-button" type="button" aria-expanded={filtersOpen} onClick={() => setFiltersOpen(!filtersOpen)}>Routes <b>{activeRoutes.size}</b></button>
+          <button className="filter-button" type="button" aria-expanded={filtersOpen} onClick={() => setFiltersOpen(!filtersOpen)}>Routes <b>{selectedRouteCount}</b></button>
           <button className="location-button" type="button" onClick={locate}><span aria-hidden="true">◎</span><em>Use my location</em></button>
         </div>
       </header>
 
       {filtersOpen && <section className="filter-panel" aria-label="Route filters">
-        <div className="agency-filters"><button type="button" onClick={() => toggleAgency('iu')}>IU Campus Bus</button><button type="button" onClick={() => toggleAgency('bt')}>Bloomington Transit</button></div>
-        <div className="route-filters">{snapshot?.routes.map((route) => <button key={routeKey(route.agency, route.id)} className={activeRoutes.has(routeKey(route.agency, route.id)) ? 'active' : ''} style={{ '--route': route.color } as React.CSSProperties} type="button" onClick={() => toggleRoute(route)}><i />{route.shortName}</button>)}</div>
+        <div className="filter-panel-heading"><div><strong>Choose your routes</strong><span>Only selected routes will appear. Saved on this device.</span></div><button type="button" onClick={() => setFiltersOpen(false)}>Done</button></div>
+        <div className="agency-filters"><button type="button" onClick={() => toggleAgency('iu')}>{agencyButtonLabel('iu', 'IU')}</button><button type="button" onClick={() => toggleAgency('bt')}>{agencyButtonLabel('bt', 'BT')}</button><button className="clear-routes" type="button" onClick={clearRoutes} disabled={!selectedRouteCount}>Clear all</button></div>
+        <div className="route-filters">{snapshot?.routes.map((route) => { const selected = activeRoutes.has(routeKey(route.agency, route.id)); return <button key={routeKey(route.agency, route.id)} className={selected ? 'active' : ''} aria-pressed={selected} style={{ '--route': route.color } as React.CSSProperties} type="button" onClick={() => toggleRoute(route)}><i />{route.agency === 'iu' ? 'IU' : 'BT'} {route.shortName}</button>; })}</div>
       </section>}
       {locationError && <div className="toast" role="status">{locationError}<button onClick={() => setLocationError('')} aria-label="Dismiss">×</button></div>}
       {snapshot?.alerts[0] && <div className="alert-strip"><b>Service alert</b><span>{snapshot.alerts[0].title || snapshot.alerts[0].description}</span></div>}
 
       <section className="map-stage" aria-label="Live Bloomington transit map">
         {snapshot ? <TransitMap routes={snapshot.routes} stops={snapshot.stops} vehicles={snapshot.vehicles} activeRoutes={activeRoutes} position={position} onSelectStop={setSelectedStop} /> : <div className="map-loading"><span />Loading live map…</div>}
-        <div className="map-status"><span className={overallOk ? 'status-dot live' : 'status-dot unavailable'} />{overallOk ? `${snapshot?.vehicles.length ?? 0} buses on map` : 'Feeds unavailable'}</div>
+        <div className="map-status"><span className={overallOk ? 'status-dot live' : 'status-dot unavailable'} />{overallOk ? selectedRouteCount ? `${visibleVehicleCount} buses on selected routes` : 'Choose routes to begin' : 'Feeds unavailable'}</div>
         <div className="map-key"><span><i className="iu-dot" /> IU</span><span><i className="bt-dot" /> BT</span></div>
       </section>
 
@@ -146,7 +180,7 @@ export default function Home() {
               <span className="arrival-copy"><strong>{selectedStop ? (arrival.destination || route?.longName || 'Direction unavailable') : (stop?.name || 'Nearby stop')}</strong><span>{arrival.agency.toUpperCase()} · {arrival.destination || route?.longName || 'Direction unavailable'}</span></span>
               <span className="arrival-time"><strong>{minutes}</strong><small>min</small><em className={arrival.freshness}>{arrival.freshness}</em></span>
             </button>;
-          }) : <div className="empty-state"><strong>No upcoming arrivals found</strong><span>{overallOk ? 'Try another nearby stop or route.' : 'Live feeds are temporarily unavailable. The map will retry automatically.'}</span></div>}
+          }) : <div className="empty-state"><strong>{selectedRouteCount ? 'No upcoming arrivals found' : 'Choose the routes you use'}</strong><span>{overallOk ? selectedRouteCount ? 'Try another nearby stop or route.' : 'Tap Routes above. Your choices will be remembered on this device.' : 'Live feeds are temporarily unavailable. The map will retry automatically.'}</span></div>}
         </div>
         {selectedStop && <button className="back-button" type="button" onClick={() => setSelectedStop(undefined)}>← Back to nearby stops</button>}
         <p className="disclaimer">Independent third-party tracker · Not affiliated with Bloomington Transit or Indiana University · Arrival times may change</p>
