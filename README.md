@@ -39,6 +39,10 @@ npm run lint
 npm run build
 ```
 
+## Deployment
+
+Pushes to `main` are built and published by `.github/workflows/pages.yml` to GitHub Pages at `https://btb.singhdan.me`. Production does not run on LAIR or require a long-lived application server.
+
 ## Reliability notes
 
 The app does not calculate its own bus ETA. It uses provider predictions, marks realtime positions stale after 90 seconds, and shows an unavailable state instead of inventing information. It is a static GitHub Pages deployment with no server process, API keys, or committed credentials.
