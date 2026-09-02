@@ -31,6 +31,7 @@ const vehiclesResponse = z.object({ get_vehicles: z.array(vehicleSchema) });
 const arrivalsResponse = z.object({
   get_stop_etas: z.array(z.object({ id: z.union([z.string(), z.number()]), enRoute: z.array(etaSchema).default([]) })),
 });
+const staticAgencyData = new Map<AgencyId, Promise<Pick<TransitSnapshot, 'routes' | 'stops'>>>();
 
 async function request<T>(agency: AgencyId, service: string, schema: z.ZodType<T>, params: Record<string, string> = {}) {
   const query = new URLSearchParams({ service, ...params });
@@ -39,24 +40,34 @@ async function request<T>(agency: AgencyId, service: string, schema: z.ZodType<T
   return schema.parse(await response.json());
 }
 
+function getAgencyStaticData(agency: AgencyId) {
+  const cached = staticAgencyData.get(agency);
+  if (cached) return cached;
+  const pending = Promise.all([request(agency, 'get_routes', routesResponse), request(agency, 'get_stops', stopsResponse)]).then(([routeData, stopData]) => {
+    const stopRoutes = new Map<string, string[]>();
+    for (const route of routeData.get_routes) for (const rawStopId of route.stops) {
+      const stopId = String(rawStopId);
+      stopRoutes.set(stopId, [...(stopRoutes.get(stopId) ?? []), String(route.id)]);
+    }
+    const routes: TransitRoute[] = routeData.get_routes.map((route) => ({
+      agency, id: String(route.id), shortName: route.abbr, longName: route.name,
+      color: normalizeColor(route.color, agency === 'iu' ? '#990000' : '#006298'), textColor: '#ffffff',
+      paths: route.encLine ? [decodePolyline(route.encLine)] : [],
+    }));
+    const stops: TransitStop[] = [...new Map(stopData.get_stops.map((stop) => [String(stop.id), {
+      agency, id: String(stop.id), name: stop.name, lat: stop.lat, lng: stop.lng, routeIds: stopRoutes.get(String(stop.id)) ?? [],
+    }])).values()];
+    return { routes, stops };
+  });
+  staticAgencyData.set(agency, pending);
+  void pending.catch(() => { if (staticAgencyData.get(agency) === pending) staticAgencyData.delete(agency); });
+  return pending;
+}
+
 async function getAgencySnapshot(agency: AgencyId): Promise<TransitSnapshot> {
-  const [routeData, stopData, vehicleData] = await Promise.all([
-    request(agency, 'get_routes', routesResponse), request(agency, 'get_stops', stopsResponse),
-    request(agency, 'get_vehicles', vehiclesResponse, { includeETAData: '1', orderedETAArray: '1' }),
+  const [staticData, vehicleData] = await Promise.all([
+    getAgencyStaticData(agency), request(agency, 'get_vehicles', vehiclesResponse, { includeETAData: '1', orderedETAArray: '1' }),
   ]);
-  const stopRoutes = new Map<string, string[]>();
-  for (const route of routeData.get_routes) for (const rawStopId of route.stops) {
-    const stopId = String(rawStopId);
-    stopRoutes.set(stopId, [...(stopRoutes.get(stopId) ?? []), String(route.id)]);
-  }
-  const routes: TransitRoute[] = routeData.get_routes.map((route) => ({
-    agency, id: String(route.id), shortName: route.abbr, longName: route.name,
-    color: normalizeColor(route.color, agency === 'iu' ? '#990000' : '#006298'), textColor: '#ffffff',
-    paths: route.encLine ? [decodePolyline(route.encLine)] : [],
-  }));
-  const stops: TransitStop[] = [...new Map(stopData.get_stops.map((stop) => [String(stop.id), {
-    agency, id: String(stop.id), name: stop.name, lat: stop.lat, lng: stop.lng, routeIds: stopRoutes.get(String(stop.id)) ?? [],
-  }])).values()];
   const vehicles: TransitVehicle[] = vehicleData.get_vehicles
     .filter((vehicle) => vehicle.inService !== 0 && vehicle.lat !== 0 && vehicle.lng !== 0)
     .map((vehicle) => ({
@@ -70,7 +81,7 @@ async function getAgencySnapshot(agency: AgencyId): Promise<TransitSnapshot> {
       nextStops: vehicle.minutesToNextStops.slice(0, 3).map((stop) => ({ stopId: String(stop.stopID), minutes: stop.minutes })),
     }));
   return {
-    routes, stops, vehicles, alerts: [], generatedAt: Date.now(),
+    routes: staticData.routes, stops: staticData.stops, vehicles, alerts: [], generatedAt: Date.now(),
     sources: [{ agency, ok: true, updatedAt: Math.max(...vehicles.map((vehicle) => vehicle.updatedAt), Date.now()) }],
   };
 }
