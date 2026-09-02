@@ -56,7 +56,7 @@ export default function TransitMap({ routes, stops, vehicles, activeRoutes, posi
   }), [selectedStops]);
   const visible = (agency: string, routeId?: string) => Boolean(routeId && activeRoutes.has(key(agency, routeId)));
   return (
-    <MapContainer center={[39.1699, -86.5258]} zoom={14} scrollWheelZoom className="transit-map" zoomControl={false}>
+    <MapContainer center={[39.1699, -86.5258]} zoom={14} zoomSnap={.1} scrollWheelZoom className="transit-map" zoomControl={false}>
       <SimpleBasemap routeData={routeData} stopData={stopData} />
       <ResizeMap />
       <RouteViewport routes={routes} activeRoutes={activeRoutes} request={recenterRequest} sheetCollapsed={sheetCollapsed} onViewportChanged={onViewportChanged} onRecenterComplete={onRecenterComplete} />
@@ -122,13 +122,14 @@ function RouteViewport({ routes, activeRoutes, request, sheetCollapsed, onViewpo
       onRecenterComplete();
     };
     map.once('moveend', finish);
-    const bottomPadding = sheetCollapsedRef.current ? 82 : Math.min(window.innerHeight * .58, 570) + 18;
+    const edgePadding = 8;
+    const obscuredBottom = sheetCollapsedRef.current ? 58 : Math.min(window.innerHeight * .58, 570);
     map.fitBounds(L.latLngBounds(points), {
       animate: true,
       duration: .65,
       maxZoom: 16,
-      paddingTopLeft: [18, 18],
-      paddingBottomRight: [18, bottomPadding],
+      paddingTopLeft: [edgePadding, edgePadding],
+      paddingBottomRight: [edgePadding, obscuredBottom + edgePadding],
     });
     timeout.value = setTimeout(finish, 1100);
     return () => {
