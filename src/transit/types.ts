@@ -28,6 +28,11 @@ export interface TransitVehicle {
   lat: number;
   lng: number;
   heading?: number;
+  direction?: string;
+  load?: number;
+  capacity?: number;
+  onSchedule?: number;
+  nextStops?: { stopId: string; minutes: number }[];
   updatedAt: number;
   freshness: Freshness;
 }

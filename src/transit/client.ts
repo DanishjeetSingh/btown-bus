@@ -17,6 +17,9 @@ const vehicleSchema = z.object({
   routeID: z.union([z.string(), z.number()]).optional(), equipmentID: z.union([z.string(), z.number()]),
   tripID: z.union([z.string(), z.number()]).nullable().optional(), lat: z.coerce.number(), lng: z.coerce.number(),
   h: z.coerce.number().optional(), receiveTime: z.coerce.number(), inService: z.coerce.number().optional(),
+  direction: z.string().optional(), load: z.coerce.number().nullable().optional(), capacity: z.coerce.number().nullable().optional(),
+  onSchedule: z.coerce.number().nullable().optional(),
+  minutesToNextStops: z.array(z.object({ stopID: z.union([z.string(), z.number()]), minutes: z.coerce.number() })).default([]),
 });
 const etaSchema = z.object({
   stopID: z.union([z.string(), z.number()]), routeID: z.union([z.string(), z.number()]),
@@ -60,6 +63,11 @@ async function getAgencySnapshot(agency: AgencyId): Promise<TransitSnapshot> {
       agency, id: String(vehicle.equipmentID), routeId: vehicle.routeID == null ? undefined : String(vehicle.routeID),
       tripId: vehicle.tripID == null ? undefined : String(vehicle.tripID), lat: vehicle.lat, lng: vehicle.lng,
       heading: vehicle.h, updatedAt: vehicle.receiveTime, freshness: realtimeFreshness(vehicle.receiveTime),
+      direction: vehicle.direction?.trim() || undefined,
+      load: vehicle.load ?? undefined,
+      capacity: vehicle.capacity && vehicle.capacity > 0 ? vehicle.capacity : undefined,
+      onSchedule: vehicle.onSchedule ?? undefined,
+      nextStops: vehicle.minutesToNextStops.slice(0, 3).map((stop) => ({ stopId: String(stop.stopID), minutes: stop.minutes })),
     }));
   return {
     routes, stops, vehicles, alerts: [], generatedAt: Date.now(),

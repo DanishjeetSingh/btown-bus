@@ -23,6 +23,7 @@ const key = (agency: string, id: string) => `${agency}:${id}`;
 
 export default function TransitMap({ routes, stops, vehicles, activeRoutes, position, expanded, onSelectStop }: Props) {
   const routeMap = useMemo(() => new Map(routes.map((route) => [key(route.agency, route.id), route])), [routes]);
+  const stopMap = useMemo(() => new Map(stops.map((stop) => [key(stop.agency, stop.id), stop])), [stops]);
   const visible = (agency: string, routeId?: string) => Boolean(routeId && activeRoutes.has(key(agency, routeId)));
   return (
     <MapContainer center={[39.1699, -86.5258]} zoom={14} scrollWheelZoom className="transit-map" zoomControl={false}>
@@ -38,8 +39,8 @@ export default function TransitMap({ routes, stops, vehicles, activeRoutes, posi
       ))}
       {vehicles.filter((vehicle) => visible(vehicle.agency, vehicle.routeId)).map((vehicle) => {
         const route = vehicle.routeId ? routeMap.get(key(vehicle.agency, vehicle.routeId)) : undefined;
-        return <Marker key={key(vehicle.agency, vehicle.id)} position={[vehicle.lat, vehicle.lng]} icon={vehicleIcon(route?.shortName || '•', vehicle.agency, vehicle.freshness)}>
-          <Popup><strong>{vehicle.agency === 'iu' ? 'IU' : 'BT'} {route?.shortName || 'bus'}</strong><br />{vehicle.freshness === 'live' ? 'Live position' : 'Position may be stale'}</Popup>
+        return <Marker key={key(vehicle.agency, vehicle.id)} position={[vehicle.lat, vehicle.lng]} icon={vehicleIcon(route?.shortName || '•', route?.color, vehicle.agency, vehicle.freshness, vehicle.heading)}>
+          <Popup><VehiclePopup vehicle={vehicle} stopMap={stopMap} /></Popup>
         </Marker>;
       })}
       {position && <CircleMarker center={position} radius={8} pathOptions={{ color: '#fff', fillColor: '#cf3a26', fillOpacity: 1, weight: 3 }} />}
@@ -81,11 +82,44 @@ function Recenter({ position }: { position?: [number, number] }) {
   return null;
 }
 
-function vehicleIcon(label: string, agency: string, freshness: string) {
+function VehiclePopup({ vehicle, stopMap }: { vehicle: TransitVehicle; stopMap: Map<string, TransitStop> }) {
+  const occupancy = vehicle.load != null && vehicle.capacity != null
+    ? Math.min(100, Math.max(0, (vehicle.load / vehicle.capacity) * 100))
+    : undefined;
+  const schedule = vehicle.onSchedule == null ? 'Unavailable' : scheduleLabel(vehicle.onSchedule);
+
+  return <div className="vehicle-popup">
+    <div className="vehicle-facts">
+      <strong className="vehicle-direction">{vehicle.direction || 'Direction unavailable'}</strong>
+      <span className="vehicle-fact vehicle-occupancy"><b>Occupancy</b>{occupancy == null ? <em>Unavailable</em> : <span className="occupancy-meter" role="progressbar" aria-label="Bus occupancy" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(occupancy)}><i style={{ width: `${occupancy}%` }} /></span>}</span>
+      <span className="vehicle-fact"><b>Schedule</b><strong>{schedule}</strong></span>
+    </div>
+    {vehicle.nextStops?.length ? <div className="vehicle-next-stops"><b>Next stops</b><ol>{vehicle.nextStops.map((stop, index) => <li key={`${stop.stopId}:${index}`}><span>{stopMap.get(key(vehicle.agency, stop.stopId))?.name || 'Upcoming stop'}</span><em>{formatMinutes(stop.minutes)}</em></li>)}</ol></div> : <p className="vehicle-unavailable">Upcoming stops unavailable</p>}
+    {vehicle.freshness !== 'live' && <p className="vehicle-unavailable">Position may be stale</p>}
+  </div>;
+}
+
+function vehicleIcon(label: string, routeColor: string | undefined, agency: string, freshness: string, heading?: number) {
+  const hasHeading = Number.isFinite(heading);
+  const rotation = hasHeading ? ((heading! % 360) + 360) % 360 : 0;
+  const labelOffset = 2;
+  const labelX = -Math.sin(rotation * Math.PI / 180) * labelOffset;
+  const labelY = Math.cos(rotation * Math.PI / 180) * labelOffset;
+  const color = /^#[0-9a-f]{3,8}$/i.test(routeColor || '') ? routeColor : agency === 'iu' ? '#990000' : '#006298';
   return L.divIcon({
-    className: '', iconSize: [42, 42], iconAnchor: [21, 21],
-    html: `<div class="bus-marker ${agency} ${freshness}"><b>${escapeHtml(label)}</b><small>${agency.toUpperCase()}</small></div>`,
+    className: '', iconSize: [46, 46], iconAnchor: [23, 23],
+    html: `<div class="bus-marker ${agency} ${freshness} ${hasHeading ? 'has-heading' : 'no-heading'}">
+      <span class="bus-body" style="--bus-color: ${color}; transform: rotate(${rotation}deg)"><span class="bus-windshield"></span><span class="bus-headlights"></span></span>
+      <b style="transform: translate(${labelX.toFixed(2)}px, ${labelY.toFixed(2)}px)">${escapeHtml(label)}</b>
+    </div>`,
   });
 }
+
+function scheduleLabel(value: number) {
+  if (value >= 0) return 'On time';
+  return Math.abs(value) <= 5 ? 'Slightly delayed' : 'Delayed';
+}
+
+function formatMinutes(value: number) { return value <= 0 ? 'Now' : `${value} min`; }
 
 function escapeHtml(value: string) { return value.replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[char]!); }
