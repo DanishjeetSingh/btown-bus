@@ -35,7 +35,7 @@ const staticAgencyData = new Map<AgencyId, Promise<Pick<TransitSnapshot, 'routes
 
 async function request<T>(agency: AgencyId, service: string, schema: z.ZodType<T>, params: Record<string, string> = {}) {
   const query = new URLSearchParams({ service, ...params });
-  const response = await fetch(`${FEEDS[agency]}?${query}`, { headers: { accept: 'application/json' }, cache: 'no-store' });
+  const response = await fetch(`${FEEDS[agency]}?${query}`, { headers: { accept: 'application/json' }, cache: 'no-store', signal: AbortSignal.timeout(10_000) });
   if (!response.ok) throw new Error(`${agency.toUpperCase()} feed returned ${response.status}`);
   return schema.parse(await response.json());
 }
@@ -81,7 +81,7 @@ async function getAgencySnapshot(agency: AgencyId): Promise<TransitSnapshot> {
       nextStops: vehicle.minutesToNextStops.slice(0, 3).map((stop) => ({ stopId: String(stop.stopID), minutes: stop.minutes })),
     }));
   return {
-    routes: staticData.routes, stops: staticData.stops, vehicles, alerts: [], generatedAt: Date.now(),
+    routes: staticData.routes, stops: staticData.stops, vehicles, generatedAt: Date.now(),
     sources: [{ agency, ok: true, updatedAt: Math.max(...vehicles.map((vehicle) => vehicle.updatedAt), Date.now()) }],
   };
 }
@@ -92,7 +92,7 @@ export async function getClientSnapshot(): Promise<TransitSnapshot> {
   const good = results.flatMap((result) => result.status === 'fulfilled' ? [result.value] : []);
   return {
     routes: good.flatMap((item) => item.routes), stops: good.flatMap((item) => item.stops),
-    vehicles: good.flatMap((item) => item.vehicles), alerts: [], generatedAt: Date.now(),
+    vehicles: good.flatMap((item) => item.vehicles), generatedAt: Date.now(),
     sources: results.flatMap((result, index) => result.status === 'fulfilled' ? result.value.sources : [{ agency: agencies[index], ok: false, updatedAt: Date.now(), message: 'Public feed unavailable' }]),
   };
 }
@@ -106,11 +106,14 @@ export async function getClientArrivals(stops: { agency: AgencyId; id: string }[
       data.get_stop_etas.flatMap((stop) => stop.enRoute.map((eta) => ({
         agency, routeId: String(eta.routeID), stopId: String(eta.stopID || stop.id),
         vehicleId: eta.equipmentID == null ? undefined : String(eta.equipmentID), destination: eta.direction,
-        predictedArrival: now + Math.max(0, eta.minutes) * 60_000, source: 'realtime' as const,
+        predictedArrival: now + Math.max(0, eta.minutes) * 60_000,
         updatedAt: now, freshness: 'live' as const,
       }))))];
   });
   const results = await Promise.allSettled(tasks);
+  if (results.length && results.every((result) => result.status === 'rejected')) {
+    throw new Error('All requested arrival feeds are unavailable');
+  }
   return results.flatMap((result) => result.status === 'fulfilled' ? result.value : []).sort((a, b) => a.predictedArrival - b.predictedArrival);
 }
 

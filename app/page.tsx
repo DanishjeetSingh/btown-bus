@@ -2,6 +2,8 @@
 
 import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { realtimeFreshness } from '@/src/transit/freshness';
+import { startPolling } from '@/src/transit/polling';
 import { getClientArrivals, getClientSnapshot } from '@/src/transit/client';
 import type { TransitArrival, TransitRoute, TransitSnapshot, TransitStop } from '@/src/transit/types';
 
@@ -26,13 +28,6 @@ export default function Home() {
   const [favoriteKeys, setFavoriteKeys] = useState<Set<string>>(new Set());
   const [now, setClock] = useState(() => Date.now());
 
-  const loadSnapshot = useCallback(async () => {
-    try {
-      const next = await getClientSnapshot();
-      setSnapshot(next);
-    } catch { setSnapshot((current) => current ?? { routes: [], stops: [], vehicles: [], alerts: [], sources: [{ agency: 'bt', ok: false, updatedAt: Date.now() }, { agency: 'iu', ok: false, updatedAt: Date.now() }], generatedAt: Date.now() }); }
-  }, []);
-
   useEffect(() => {
     const timer = setTimeout(() => {
       let hasSavedPreference = false;
@@ -54,18 +49,13 @@ export default function Home() {
 
   useEffect(() => {
     if (!routePreferencesReady) return;
-    const initial = setTimeout(loadSnapshot, 0);
-    let failures = 0;
-    let timer: ReturnType<typeof setTimeout>;
-    const poll = async () => {
-      if (!document.hidden) {
-        try { await loadSnapshot(); failures = 0; } catch { failures += 1; }
-      }
-      timer = setTimeout(poll, Math.min(60_000, 15_000 * 2 ** failures));
-    };
-    timer = setTimeout(poll, 15_000);
-    return () => { clearTimeout(initial); clearTimeout(timer); };
-  }, [loadSnapshot, routePreferencesReady]);
+    return startPolling(async (signal) => {
+      const next = await getClientSnapshot();
+      if (!signal.aborted) setSnapshot(next);
+      // Keep the healthy provider updating normally during a partial outage.
+      return next.sources.some((source) => source.ok);
+    }, { interval: 15_000, isVisible: () => !document.hidden });
+  }, [routePreferencesReady]);
 
   useEffect(() => {
     const initial = setTimeout(() => {
@@ -83,20 +73,21 @@ export default function Home() {
     .sort((a, b) => a.distance - b.distance).slice(0, 8), [snapshot?.stops, originLat, originLng]);
 
   const requestedStops = useMemo(() => selectedStop ? [selectedStop] : nearbyStops.slice(0, 4).map((item) => item.stop), [nearbyStops, selectedStop]);
-  const requestedKey = requestedStops.map(stopKey).join(',');
+  // Use primitive stop IDs so each vehicle refresh does not restart arrival polling.
+  const requestedKey = JSON.stringify(requestedStops.map(({ agency, id }) => ({ agency, id })));
   useEffect(() => {
-    if (!requestedKey) return;
-    let cancelled = false;
-    const load = async () => {
+    const stops: { agency: TransitStop['agency']; id: string }[] = JSON.parse(requestedKey);
+    if (!stops.length) return;
+    return startPolling(async (signal) => {
       try {
-        const next = await getClientArrivals(requestedStops.map((stop) => ({ agency: stop.agency, id: stop.id })));
-        if (!cancelled) setArrivals(next);
-      } catch { if (!cancelled) setArrivals([]); }
-    };
-    load();
-    const timer = setInterval(load, 25_000);
-    return () => { cancelled = true; clearInterval(timer); };
-  }, [requestedKey, requestedStops]);
+        const next = await getClientArrivals(stops);
+        if (!signal.aborted) setArrivals(next);
+      } catch (error) {
+        if (!signal.aborted) setArrivals([]);
+        throw error;
+      }
+    }, { interval: 25_000, isVisible: () => !document.hidden });
+  }, [requestedKey]);
 
   const locate = () => {
     setLocationError('');
@@ -109,7 +100,10 @@ export default function Home() {
   };
 
   const routeMap = useMemo(() => new Map((snapshot?.routes ?? []).map((route) => [routeKey(route.agency, route.id), route])), [snapshot?.routes]);
-  const displayArrivals = arrivals.filter((arrival) => activeRoutes.has(routeKey(arrival.agency, arrival.routeId))).slice(0, selectedStop ? 8 : 6);
+  const vehicles = useMemo(() => (snapshot?.vehicles ?? []).map((vehicle) => ({
+    ...vehicle, freshness: realtimeFreshness(vehicle.updatedAt, now),
+  })), [snapshot?.vehicles, now]);
+  const displayArrivals = arrivals.filter((arrival) => requestedStops.some((stop) => stop.agency === arrival.agency && stop.id === arrival.stopId) && activeRoutes.has(routeKey(arrival.agency, arrival.routeId))).slice(0, selectedStop ? 8 : 6);
   const selectedRouteCount = (snapshot?.routes ?? []).filter((route) => activeRoutes.has(routeKey(route.agency, route.id))).length;
   const visibleVehicleCount = (snapshot?.vehicles ?? []).filter((vehicle) => vehicle.routeId && activeRoutes.has(routeKey(vehicle.agency, vehicle.routeId))).length;
   const selectedDistance = selectedStop ? distanceMeters(origin, [selectedStop.lat, selectedStop.lng]) : undefined;
@@ -142,7 +136,8 @@ export default function Home() {
   };
   const toggleFavorite = (stop: TransitStop) => {
     const next = new Set(favoriteKeys); const item = stopKey(stop); if (next.has(item)) next.delete(item); else next.add(item);
-    setFavoriteKeys(next); localStorage.setItem('btown-bus-favorites', JSON.stringify([...next]));
+    setFavoriteKeys(next);
+    try { localStorage.setItem('btown-bus-favorites', JSON.stringify([...next])); } catch { /* storage may be unavailable */ }
   };
 
   return (
@@ -160,10 +155,9 @@ export default function Home() {
         <div className="route-filters">{snapshot?.routes.map((route) => { const selected = activeRoutes.has(routeKey(route.agency, route.id)); return <button key={routeKey(route.agency, route.id)} className={selected ? 'active' : ''} aria-pressed={selected} style={{ '--route': route.color } as React.CSSProperties} type="button" onClick={() => toggleRoute(route)}><i />{route.agency === 'iu' ? 'IU' : 'BT'} {route.shortName}</button>; })}</div>
       </section>}
       {locationError && <div className="toast" role="status">{locationError}<button onClick={() => setLocationError('')} aria-label="Dismiss">×</button></div>}
-      {snapshot?.alerts[0] && <div className="alert-strip"><b>Service alert</b><span>{snapshot.alerts[0].title || snapshot.alerts[0].description}</span></div>}
 
       <section className={`map-stage ${sheetCollapsed ? 'sheet-collapsed' : 'sheet-open'}`} aria-label="Live Bloomington transit map">
-        {snapshot ? <TransitMap routes={snapshot.routes} stops={snapshot.stops} vehicles={snapshot.vehicles} activeRoutes={activeRoutes} position={position} sheetCollapsed={sheetCollapsed} recenterRequest={recenterRequest} onViewportChanged={handleViewportChanged} onRecenterComplete={handleRecenterComplete} onSelectStop={(stop) => { setSelectedStop(stop); setSheetCollapsed(false); }} /> : <div className="map-loading"><span />Loading live map…</div>}
+        {snapshot ? <TransitMap routes={snapshot.routes} stops={snapshot.stops} vehicles={vehicles} activeRoutes={activeRoutes} position={position} sheetCollapsed={sheetCollapsed} recenterRequest={recenterRequest} onViewportChanged={handleViewportChanged} onRecenterComplete={handleRecenterComplete} onSelectStop={(stop) => { setSelectedStop(stop); setSheetCollapsed(false); }} /> : <div className="map-loading"><span />Loading live map…</div>}
         <div className="map-status"><span className={overallOk ? 'status-dot live' : 'status-dot unavailable'} />{overallOk ? selectedRouteCount ? `${visibleVehicleCount} buses on selected routes` : 'Choose routes to begin' : 'Feeds unavailable'}</div>
         <div className={`map-controls ${recenterVisible ? '' : 'compact'}`}>
           <button className="recenter-button" type="button" disabled={!selectedRouteCount} aria-hidden={!recenterVisible} tabIndex={recenterVisible ? 0 : -1} onClick={() => setRecenterRequest((current) => current + 1)}><FitRoutesIcon /><span>Re-center</span></button>
@@ -187,11 +181,12 @@ export default function Home() {
           {displayArrivals.length ? displayArrivals.map((arrival, index) => {
             const route = routeMap.get(routeKey(arrival.agency, arrival.routeId));
             const stop = snapshot?.stops.find((item) => item.agency === arrival.agency && item.id === arrival.stopId);
+            const freshness = realtimeFreshness(arrival.updatedAt, now);
             const minutes = Math.max(0, Math.ceil((arrival.predictedArrival - now) / 60_000));
-            return <button className="arrival-card" type="button" key={`${arrival.agency}:${arrival.tripId || arrival.vehicleId || index}:${arrival.stopId}`} onClick={() => { if (stop) { setSelectedStop(stop); setSheetCollapsed(false); } }}>
+            return <button className="arrival-card" type="button" key={`${arrival.agency}:${arrival.vehicleId || index}:${arrival.stopId}`} onClick={() => { if (stop) { setSelectedStop(stop); setSheetCollapsed(false); } }}>
               <span className="route-badge" style={{ backgroundColor: route?.color || (arrival.agency === 'iu' ? '#990000' : '#006298'), color: route?.textColor || '#fff' }}>{route?.shortName || arrival.routeId}</span>
               <span className="arrival-copy"><strong>{selectedStop ? (arrival.destination || route?.longName || 'Direction unavailable') : (stop?.name || 'Nearby stop')}</strong><span>{arrival.agency.toUpperCase()} · {arrival.destination || route?.longName || 'Direction unavailable'}</span></span>
-              <span className="arrival-time"><strong>{minutes}</strong><small>min</small><em className={arrival.freshness}>{arrival.freshness}</em></span>
+              <span className="arrival-time"><strong>{minutes}</strong><small>min</small><em className={freshness}>{freshness}</em></span>
             </button>;
           }) : <div className="empty-state"><strong>{selectedRouteCount ? 'No upcoming arrivals found' : 'Choose the routes you use'}</strong><span>{overallOk ? selectedRouteCount ? 'Try another nearby stop or route.' : 'Tap Routes above. Your choices will be remembered on this device.' : 'Live feeds are temporarily unavailable. The map will retry automatically.'}</span></div>}
         </div>

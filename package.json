@@ -11,7 +11,8 @@
     "build": "npm run prepare:map && next build",
     "start": "npx serve out",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern public/maplibre-gl-worker.mjs --ignore-pattern public/maplibre-gl-shared.mjs",
-    "validate:live": "node scripts/validate-data.mjs"
+    "validate:live": "node scripts/validate-data.mjs",
+    "test": "node --experimental-strip-types --test tests/*.test.mjs"
   },
   "dependencies": {
     "@maplibre/maplibre-gl-leaflet": "^0.1.4",
@@ -43,5 +44,6 @@
     "vite": "8.0.13",
     "wrangler": "4.92.0"
   },
-  "type": "module"
+  "type": "module",
+  "license": "MIT"
 }

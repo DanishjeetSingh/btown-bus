@@ -1,5 +1,5 @@
 export type AgencyId = 'bt' | 'iu';
-export type Freshness = 'live' | 'stale' | 'scheduled' | 'unavailable';
+export type Freshness = 'live' | 'stale' | 'unavailable';
 
 export interface TransitRoute {
   agency: AgencyId;
@@ -41,23 +41,11 @@ export interface TransitArrival {
   agency: AgencyId;
   routeId: string;
   stopId: string;
-  tripId?: string;
   vehicleId?: string;
   destination?: string;
   predictedArrival: number;
-  scheduledArrival?: number;
-  source: 'realtime' | 'scheduled';
   updatedAt?: number;
   freshness: Freshness;
-}
-
-export interface TransitAlert {
-  agency: AgencyId;
-  id: string;
-  title?: string;
-  description: string;
-  routeIds?: string[];
-  stopIds?: string[];
 }
 
 export interface SourceStatus {
@@ -71,7 +59,6 @@ export interface TransitSnapshot {
   routes: TransitRoute[];
   stops: TransitStop[];
   vehicles: TransitVehicle[];
-  alerts: TransitAlert[];
   sources: SourceStatus[];
   generatedAt: number;
 }

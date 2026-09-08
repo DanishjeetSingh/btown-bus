@@ -1,48 +1,90 @@
 # B-Town Bus
 
-A fast, mobile-first tracker that combines Bloomington Transit and IU Campus Bus in one map. It is an independent third-party project and is not affiliated with Bloomington Transit or Indiana University.
+Bloomington Transit and IU Campus Bus on one map. Pick your routes, see where the buses are, and tap a stop for arrival times.
 
-## What it does
+**[Open B-Town Bus](https://btb.singhdan.me)** — no account or API key needed.
 
-- Shows current BT and IU vehicles, route paths, and stops on one map
-- Finds nearby stops after optional location permission
-- Displays provider-supplied realtime arrivals with honest freshness labels
-- Shows direction, walking time, and a conservative “leave now” estimate
-- Filters routes, saves favorite stops locally, and keeps working when one provider fails
-- Polls vehicle data every 15 seconds and arrival data every 25 seconds, slowing down when hidden or after errors
+## On your phone
 
-## Data
+<p>
+  <img src="docs/screenshots/mobile-map.png" width="250" alt="Mobile map showing IU F buses, stops, and the selected route with the arrivals panel collapsed" />
+  <img src="docs/screenshots/mobile-routes.png" width="250" alt="Mobile route picker with Bloomington Transit and IU routes" />
+  <img src="docs/screenshots/mobile-stop.png" width="250" alt="Mobile stop details showing live arrival times and a walking estimate" />
+</p>
 
-The GitHub Pages app reads the public, browser-safe ETA Spot JSON feeds for Bloomington Transit and IU Campus Bus. Provider-specific data is validated and normalized in `src/transit/client.ts` before it reaches the UI. Captured public-feed fixtures are under `fixtures/`.
+Screenshots from the app running at a 390 × 844 mobile viewport, using public feeds on September 8, 2026. Bus positions and arrival times change throughout the day.
 
-## Development
+1. Open **Routes** and choose the routes you use. Your choices are saved on that device.
+2. Tap the location button to find stops near you, or browse the map. Without location access, nearby arrivals use downtown Bloomington as the starting point.
+3. Tap a stop for its arrivals and walking estimate. Collapse the arrivals panel to see more of the map; use **Re-center** to fit your selected routes.
 
-Requires Node.js 22.13 or newer.
+On iPhone or iPad, open the app in Safari and use **Share → Add to Home Screen**. Browsers that support an install prompt can also show an **Install** button.
 
-```bash
-npm install
+<details>
+<summary>Desktop screenshot</summary>
+
+![B-Town Bus on desktop](docs/screenshots/desktop.png)
+
+</details>
+
+## What the times mean
+
+Arrival predictions come from the transit feeds. Walking estimates use straight-line distance and an assumed walking speed; they do not account for sidewalks, crossings, or detours. Treat them as a rough guide.
+
+While the page is visible, the app checks vehicles every 15 seconds and arrivals every 25 seconds after each request finishes. Failed polls back off to at most 60 seconds; a working provider keeps updating during a partial outage. Requests time out after 10 seconds. Freshness labels update with the app clock every 15 seconds, using a 90-second cutoff for “live”.
+
+Route selections and starred stops are stored in your browser. The service worker caches the app shell and same-origin assets, but live transit responses are not cached for offline use. Current arrivals and map tiles need a network connection.
+
+This is an independent project, not affiliated with Bloomington Transit or Indiana University.
+
+## Run locally
+
+Requires **Node.js 22.13 or newer** and npm. CI uses Node.js 24.
+
+```sh
+npm ci
 npm run dev
 ```
 
-Then open `http://localhost:3000`. With the development server running, verify both upstreams with:
+Open [localhost:3000](http://localhost:3000). No environment variables, database, or backend service are needed for the standard Next.js build. The browser connects to the public transit feeds and map services directly.
 
-```bash
-npm run validate:live
+```sh
+npm test               # Polling and freshness regression tests
+npm run lint           # ESLint
+npm run build          # Type-check and export the static site to out/
+npm start              # Serve out/ after building
+npm run validate:live  # Check upstream feeds and browser CORS support
 ```
 
-On iPhone or iPad, open `https://btb.singhdan.me` in Safari, tap Share, and choose **Add to Home Screen**. The installed app uses a dedicated home-screen icon, opens without Safari chrome, respects the device safe area, and keeps an offline shell while never caching live transit API responses.
+The live-feed check contacts the providers directly; it does not need a running dev server and is not a substitute for testing the UI. `npm start` uses `npx serve`, which may download the server on first use.
 
-Production checks:
+## How it fits together
 
-```bash
-npm run lint
-npm run build
-```
+| Path | Purpose |
+| --- | --- |
+| `app/page.tsx` | Route selection, polling, location, stop arrivals, and walking estimates |
+| `app/components/TransitMap.tsx` | Leaflet interactions and MapLibre rendering of the basemap, routes, and stops |
+| `src/transit/client.ts` | Validates ETA Spot responses with Zod and normalizes both agencies into shared types |
+| `src/transit/polling.ts` | Serial polling, visibility checks, and bounded retry delays |
+| `src/transit/types.ts` | Shared route, stop, vehicle, and arrival types |
+| `app/components/InstallSupport.tsx`, `public/sw.js` | Home-screen installation and app-shell caching |
+| `scripts/prepare-maplibre.mjs` | Copies MapLibre worker files into `public/` before development and builds |
+| `fixtures/` | Captured public feeds for reference; not a runtime data source |
+
+Both agencies use ETA Spot: [Bloomington Transit](https://bloomingtontransit.etaspot.net/service.php?service=get_routes) and [IU Campus Bus](https://iucbs.etaspot.net/service.php?service=get_routes). The basemap uses OpenFreeMap, OpenMapTiles, and OpenStreetMap data; attribution is shown on the map.
 
 ## Deployment
 
-Pushes to `main` are built and published by `.github/workflows/pages.yml` to GitHub Pages at `https://btb.singhdan.me`. Production does not run on LAIR or require a long-lived application server.
+[The Pages workflow](.github/workflows/pages.yml) builds pushes to `main` and publishes `out/` to GitHub Pages. It can also be run manually. There is no production application server.
 
-## Reliability notes
+For your own deployment, configure GitHub Pages to use GitHub Actions and update or remove `public/CNAME`. Update the production URL in `app/layout.tsx` as well. The current service worker and asset paths assume hosting at the domain root; a project URL under `/repository-name/` needs path configuration changes.
 
-The app does not calculate its own bus ETA. It uses provider predictions, marks realtime positions stale after 90 seconds, and shows an unavailable state instead of inventing information. It is a static GitHub Pages deployment with no server process, API keys, or committed credentials.
+The repository also retains a separate Sites/Vite preview configuration in `vite.config.ts` and `.openai/hosting.json`. The npm development/build scripts and Pages workflow use Next.js. Keep that distinction in mind before removing preview dependencies.
+
+## Contributing
+
+For a bug report, include your browser, the route and stop, the approximate time, and what you expected to see. For code changes, run the tests, lint, and the production build, then check route selection and stop arrivals at a phone-sized viewport. Live feeds can be empty outside service hours.
+
+## License
+
+The application code and original documentation are available under the [MIT License](LICENSE). Transit feed fixtures, map data, and third-party assets retain their respective owners’ terms; the MIT license does not relicense them.
