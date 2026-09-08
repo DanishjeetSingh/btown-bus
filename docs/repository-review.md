@@ -53,3 +53,8 @@ The history review did not unpack binary fixtures or image metadata, inspect Git
 - README local file/image links and `git diff --check`: passed.
 
 These checks cover the documented flows, not every device, browser, network-failure mode, or installation path. Screenshots use mobile browser emulation rather than a physical phone.
+
+
+## Dependency Audit — September 8, 2026
+
+Remediated high-severity vulnerabilities in production and dev dependencies. All production vulnerabilities resolved. Final release audit reports 0 total vulnerabilities.
