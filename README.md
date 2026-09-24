@@ -1,6 +1,6 @@
 # B-Town Bus
 
-A bus tracker for Bloomington that puts Bloomington Transit and IU Campus Bus on the same map. I built it because I got tired of switching between two apps to figure out which bus was actually coming first.
+A bus tracker for Bloomington that puts Bloomington Transit and IU Campus Bus on the same map. I built it because the existing options, IU Mobile and ETA Spot, are honestly bad to use, and I knew I could make something better.
 
 It's live at **[btb.singhdan.me](https://btb.singhdan.me)**. No account, no API key. There's also a native iPhone app in [`ios/`](ios/) with a Live Activity that follows your bus to your stop.
 
