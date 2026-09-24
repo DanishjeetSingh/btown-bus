@@ -9,6 +9,8 @@ export interface TransitRoute {
   color?: string;
   textColor?: string;
   paths?: [number, number][][];
+  /** Stop IDs in the order the route serves them. */
+  stopIds?: string[];
 }
 
 export interface TransitStop {
@@ -32,6 +34,8 @@ export interface TransitVehicle {
   load?: number;
   capacity?: number;
   onSchedule?: number;
+  /** The stop this vehicle is heading to next. */
+  nextStopId?: string;
   nextStops?: { stopId: string; minutes: number }[];
   updatedAt: number;
   freshness: Freshness;

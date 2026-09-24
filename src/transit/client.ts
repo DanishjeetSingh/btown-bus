@@ -18,7 +18,7 @@ const vehicleSchema = z.object({
   tripID: z.union([z.string(), z.number()]).nullable().optional(), lat: z.coerce.number(), lng: z.coerce.number(),
   h: z.coerce.number().optional(), receiveTime: z.coerce.number(), inService: z.coerce.number().optional(),
   direction: z.string().optional(), load: z.coerce.number().nullable().optional(), capacity: z.coerce.number().nullable().optional(),
-  onSchedule: z.coerce.number().nullable().optional(),
+  onSchedule: z.coerce.number().nullable().optional(), nextStopID: z.union([z.string(), z.number()]).nullable().optional(),
   minutesToNextStops: z.array(z.object({ stopID: z.union([z.string(), z.number()]), minutes: z.coerce.number() })).default([]),
 });
 const etaSchema = z.object({
@@ -53,6 +53,7 @@ function getAgencyStaticData(agency: AgencyId) {
       agency, id: String(route.id), shortName: route.abbr, longName: route.name,
       color: normalizeColor(route.color, agency === 'iu' ? '#990000' : '#006298'), textColor: '#ffffff',
       paths: route.encLine ? [decodePolyline(route.encLine)] : [],
+      stopIds: route.stops.map(String),
     }));
     const stops: TransitStop[] = [...new Map(stopData.get_stops.map((stop) => [String(stop.id), {
       agency, id: String(stop.id), name: stop.name, lat: stop.lat, lng: stop.lng, routeIds: stopRoutes.get(String(stop.id)) ?? [],
@@ -78,7 +79,8 @@ async function getAgencySnapshot(agency: AgencyId): Promise<TransitSnapshot> {
       load: vehicle.load ?? undefined,
       capacity: vehicle.capacity && vehicle.capacity > 0 ? vehicle.capacity : undefined,
       onSchedule: vehicle.onSchedule ?? undefined,
-      nextStops: vehicle.minutesToNextStops.slice(0, 3).map((stop) => ({ stopId: String(stop.stopID), minutes: stop.minutes })),
+      nextStopId: vehicle.nextStopID ? String(vehicle.nextStopID) : vehicle.minutesToNextStops[0] ? String(vehicle.minutesToNextStops[0].stopID) : undefined,
+      nextStops: vehicle.minutesToNextStops.map((stop) => ({ stopId: String(stop.stopID), minutes: stop.minutes })),
     }));
   return {
     routes: staticData.routes, stops: staticData.stops, vehicles, generatedAt: Date.now(),

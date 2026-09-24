@@ -1,12 +1,8 @@
-# App screenshots
+# Screenshots
 
-Captured September 8, 2026 from a local production export (`npm run build`), served at localhost. The app used the live public ETA Spot feeds and its normal map services. No feed responses or arrival times were mocked.
+Taken September 24, 2026, around 2 AM, so no buses were running. That's why the map says "No buses running" and every arrival is a morning time. The times are real feed predictions, not mocked.
 
-- `mobile-map.png`: IU F selected, arrivals collapsed, routes re-centered.
-- `mobile-routes.png`: route picker open with IU F selected.
-- `mobile-stop.png`: Alumni Center stop selected, showing provider arrivals.
-- `desktop.png`: the same stop at a wider viewport.
+- `web-*.png`: the production build (`npm run build`) served locally in headless Chrome. Mobile shots are 390 × 844 at 3×; desktop is 1440 × 900 at 2×, resized to 1600 px wide. Location was faked to a spot near the IMU.
+- `ios-*.png`: the iOS app in the iPhone 17 simulator, with the simulator's location set near the IMU. The Live Activity shot uses the debug-only `-demoLiveActivity` launch argument, because there was no real bus to track at that hour.
 
-Mobile captures use Chromium with a 390 × 844 CSS-pixel viewport, touch/mobile emulation, and a device scale factor of 2. The desktop capture uses a 1440 × 960 viewport at the same scale. These are browser viewport captures, not physical-device screenshots. Location permission was not granted; walking distances use the app's downtown default.
-
-To refresh them, serve a production build, select an operating route, and wait for both the map and live data to load. Capture the map, route picker, and a stop with arrivals. Preserve the unmodified UI and update the date in the main README. Check that the images contain no browser chrome, personal location, or unrelated windows.
+When you retake them, do it during service hours so there are buses on the map.

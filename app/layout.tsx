@@ -1,10 +1,10 @@
 import type { Metadata, Viewport } from 'next';
-import { Geist, Geist_Mono } from 'next/font/google';
+import { Archivo, Geist } from 'next/font/google';
 import InstallSupport from './components/InstallSupport';
 import './globals.css';
 
 const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] });
-const geistMono = Geist_Mono({ variable: '--font-geist-mono', subsets: ['latin'] });
+const archivo = Archivo({ variable: '--font-display', subsets: ['latin'], axes: ['wdth'] });
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://btb.singhdan.me'),
@@ -35,8 +35,11 @@ export const metadata: Metadata = {
     card: 'summary_large_image', title: 'B-Town Bus', description: 'Bloomington + IU buses, live.', images: ['/og.png'],
   },
 };
-export const viewport: Viewport = { width: 'device-width', initialScale: 1, viewportFit: 'cover', themeColor: '#14221e' };
+export const viewport: Viewport = {
+  width: 'device-width', initialScale: 1, viewportFit: 'cover',
+  themeColor: [{ media: '(prefers-color-scheme: light)', color: '#ffcb2f' }, { media: '(prefers-color-scheme: dark)', color: '#14120e' }],
+};
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en"><head><meta name="apple-mobile-web-app-capable" content="yes" /></head><body className={`${geistSans.variable} ${geistMono.variable}`}><InstallSupport />{children}</body></html>;
+  return <html lang="en"><head><meta name="apple-mobile-web-app-capable" content="yes" /></head><body className={`${geistSans.variable} ${archivo.variable}`}><InstallSupport />{children}</body></html>;
 }

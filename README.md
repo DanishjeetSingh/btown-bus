@@ -1,90 +1,81 @@
 # B-Town Bus
 
-Bloomington Transit and IU Campus Bus on one map. Pick your routes, see where the buses are, and tap a stop for arrival times.
+A bus tracker for Bloomington that puts Bloomington Transit and IU Campus Bus on the same map. I built it because I got tired of switching between two apps to figure out which bus was actually coming first.
 
-**[Open B-Town Bus](https://btb.singhdan.me)** — no account or API key needed.
+It's live at **[btb.singhdan.me](https://btb.singhdan.me)**. No account, no API key. There's also a native iPhone app in [`ios/`](ios/) with a Live Activity that follows your bus to your stop.
 
-## On your phone
+<table>
+  <tr>
+    <td><img src="docs/screenshots/web-mobile-saved.png" width="230" alt="Saved stops with live arrival times" /></td>
+    <td><img src="docs/screenshots/web-mobile-stop.png" width="230" alt="Stop sheet with walk time, when to leave, and arrivals" /></td>
+    <td><img src="docs/screenshots/web-mobile-map.png" width="230" alt="Map in dark mode showing selected routes and stops" /></td>
+  </tr>
+</table>
 
-<p>
-  <img src="docs/screenshots/mobile-map.png" width="250" alt="Mobile map showing IU F buses, stops, and the selected route with the arrivals panel collapsed" />
-  <img src="docs/screenshots/mobile-routes.png" width="250" alt="Mobile route picker with Bloomington Transit and IU routes" />
-  <img src="docs/screenshots/mobile-stop.png" width="250" alt="Mobile stop details showing live arrival times and a walking estimate" />
-</p>
+![Desktop layout with the stop list on the left and the map on the right](docs/screenshots/web-desktop.png)
 
-Screenshots from the app running at a 390 × 844 mobile viewport, using public feeds on September 8, 2026. Bus positions and arrival times change throughout the day.
+## How I use it
 
-1. Open **Routes** and choose the routes you use. Your choices are saved on that device.
-2. Tap the location button to find stops near you, or browse the map. Without location access, nearby arrivals use downtown Bloomington as the starting point.
-3. Tap a stop for its arrivals and walking estimate. Collapse the arrivals panel to see more of the map; use **Re-center** to fit your selected routes.
+Pick the routes you actually ride under **Routes**. Star the stops you use and they show up on the **Saved** tab with the next few buses, so opening the app is usually all it takes. **Nearby** lists the closest stops to wherever you are, and **Map** shows the routes and live bus positions.
 
-On iPhone or iPad, open the app in Safari and use **Share → Add to Home Screen**. Browsers that support an install prompt can also show an **Install** button.
+Tap a stop to see every bus headed there, how many stops away each one is, how long the walk is, and when you'd need to leave. If you're already standing at the stop, it says so and stops telling you to leave. Hit **Track** on a bus and it stays pinned to the bottom of the screen until it shows up.
 
-<details>
-<summary>Desktop screenshot</summary>
+To put it on your home screen on an iPhone, open it in Safari and use Share → Add to Home Screen. Safari may still ask for location once each time you launch it from the home screen. That's a Safari thing, not something the site can turn off, and it's one of the reasons the native app exists.
 
-![B-Town Bus on desktop](docs/screenshots/desktop.png)
+## iPhone app
 
-</details>
+<table>
+  <tr>
+    <td><img src="docs/screenshots/ios-saved.png" width="200" alt="iOS Saved tab" /></td>
+    <td><img src="docs/screenshots/ios-stop.png" width="200" alt="iOS stop detail" /></td>
+    <td><img src="docs/screenshots/ios-map.png" width="200" alt="iOS map with routes" /></td>
+    <td><img src="docs/screenshots/ios-live-activity.png" width="200" alt="Live Activity on the Lock Screen" /></td>
+  </tr>
+</table>
 
-## What the times mean
+Same idea as the site, written in SwiftUI. The part I care about most is tracking: pick a bus, say how many stops out you want to hear about it (5 by default), and a Live Activity shows up on the Lock Screen and Dynamic Island with the countdown, stops remaining, your walk time, and when to leave. It buzzes when it's time to go and again when the bus is pulling up, then clears itself once the bus has passed.
 
-Arrival predictions come from the transit feeds. Walking estimates use straight-line distance and an assumed walking speed; they do not account for sidewalks, crossings, or detours. Treat them as a rough guide.
+Build instructions and the fine print about background tracking are in [ios/README.md](ios/README.md).
 
-While the page is visible, the app checks vehicles every 15 seconds and arrivals every 25 seconds after each request finishes. Failed polls back off to at most 60 seconds; a working provider keeps updating during a partial outage. Requests time out after 10 seconds. Freshness labels update with the app clock every 15 seconds, using a 90-second cutoff for “live”.
+## About the numbers
 
-Route selections and starred stops are stored in your browser. The service worker caches the app shell and same-origin assets, but live transit responses are not cached for offline use. Current arrivals and map tiles need a network connection.
+Arrival times come straight from the agencies' ETA Spot feeds; nothing is guessed from bus speed. Buses refresh every 15 seconds and arrivals every 20 while the page is open. If one agency's feed goes down, the other keeps working.
 
-This is an independent project, not affiliated with Bloomington Transit or Indiana University.
+Walk times are rough. On the web it's straight-line distance plus 25%, at 1.3 m/s. The iPhone app asks Apple Maps for real walking directions. "Leave by" adds a minute so you're not sprinting. You count as being at a stop within about 40 m, plus some slack for GPS error.
 
-## Run locally
+Your routes, saved stops, and tracked bus are stored on your device only.
 
-Requires **Node.js 22.13 or newer** and npm. CI uses Node.js 24.
+This is a personal project. It isn't affiliated with Bloomington Transit or Indiana University, and predictions can be wrong, so don't blame me if the 6 is late.
+
+## Running it yourself
+
+You need Node 22.13 or newer.
 
 ```sh
 npm ci
 npm run dev
 ```
 
-Open [localhost:3000](http://localhost:3000). No environment variables, database, or backend service are needed for the standard Next.js build. The browser connects to the public transit feeds and map services directly.
+Then open localhost:3000. There's no backend: the browser talks to the transit feeds and map tiles directly.
 
 ```sh
-npm test               # Polling and freshness regression tests
-npm run lint           # ESLint
-npm run build          # Type-check and export the static site to out/
-npm start              # Serve out/ after building
-npm run validate:live  # Check upstream feeds and browser CORS support
+npm test               # polling, freshness, and trip math
+npm run lint
+npm run build          # static export to out/
+npm run validate:live  # pings the real feeds
 ```
 
-The live-feed check contacts the providers directly; it does not need a running dev server and is not a substitute for testing the UI. `npm start` uses `npx serve`, which may download the server on first use.
+Pushes to `main` deploy to GitHub Pages through [the workflow](.github/workflows/pages.yml). If you fork it, change or delete `public/CNAME` and the URL in `app/layout.tsx`. The site assumes it's served from the root of a domain.
 
-## How it fits together
+## Where things live
 
-| Path | Purpose |
-| --- | --- |
-| `app/page.tsx` | Route selection, polling, location, stop arrivals, and walking estimates |
-| `app/components/TransitMap.tsx` | Leaflet interactions and MapLibre rendering of the basemap, routes, and stops |
-| `src/transit/client.ts` | Validates ETA Spot responses with Zod and normalizes both agencies into shared types |
-| `src/transit/polling.ts` | Serial polling, visibility checks, and bounded retry delays |
-| `src/transit/types.ts` | Shared route, stop, vehicle, and arrival types |
-| `app/components/InstallSupport.tsx`, `public/sw.js` | Home-screen installation and app-shell caching |
-| `scripts/prepare-maplibre.mjs` | Copies MapLibre worker files into `public/` before development and builds |
-| `fixtures/` | Captured public feeds for reference; not a runtime data source |
-
-Both agencies use ETA Spot: [Bloomington Transit](https://bloomingtontransit.etaspot.net/service.php?service=get_routes) and [IU Campus Bus](https://iucbs.etaspot.net/service.php?service=get_routes). The basemap uses OpenFreeMap, OpenMapTiles, and OpenStreetMap data; attribution is shown on the map.
-
-## Deployment
-
-[The Pages workflow](.github/workflows/pages.yml) builds pushes to `main` and publishes `out/` to GitHub Pages. It can also be run manually. There is no production application server.
-
-For your own deployment, configure GitHub Pages to use GitHub Actions and update or remove `public/CNAME`. Update the production URL in `app/layout.tsx` as well. The current service worker and asset paths assume hosting at the domain root; a project URL under `/repository-name/` needs path configuration changes.
-
-The repository also retains a separate Sites/Vite preview configuration in `vite.config.ts` and `.openai/hosting.json`. The npm development/build scripts and Pages workflow use Next.js. Keep that distinction in mind before removing preview dependencies.
-
-## Contributing
-
-For a bug report, include your browser, the route and stop, the approximate time, and what you expected to see. For code changes, run the tests, lint, and the production build, then check route selection and stop arrivals at a phone-sized viewport. Live feeds can be empty outside service hours.
+- `app/page.tsx` has the three views, polling, favorites, and trip tracking.
+- `app/components/` has the stop cards, stop sheet, trip card, route picker, and the Leaflet/MapLibre map.
+- `app/hooks/useLiveLocation.ts` keeps one location watch alive and restarts it when it goes stale.
+- `src/transit/` is the feed client, polling, and `trip.ts`, which holds the stops-away, walk, and leave-time rules. The iOS app ports the same rules.
+- `ios/` is the SwiftUI app and its Live Activity widget.
+- `fixtures/` holds saved feed responses for reference. The app doesn't read them.
 
 ## License
 
-The application code and original documentation are available under the [MIT License](LICENSE). Transit feed fixtures, map data, and third-party assets retain their respective owners’ terms; the MIT license does not relicense them.
+MIT, see [LICENSE](LICENSE). That covers my code. Transit data, map data, and map tiles belong to their providers and keep their own terms.

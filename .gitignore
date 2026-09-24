@@ -38,3 +38,8 @@ next-env.d.ts
 /work/
 /public/maplibre-gl-worker.mjs
 /public/maplibre-gl-shared.mjs
+
+# iOS
+/ios/build/
+xcuserdata/
+*.xcuserstate
