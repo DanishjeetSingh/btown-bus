@@ -23,7 +23,7 @@ struct TripBanner: View {
                                 .background(Color(hex: hex), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                                 .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.busCream, lineWidth: 2.5))
                             VStack(alignment: .leading, spacing: 1) {
-                                Text(kicker(watch))
+                                Text(kicker(watch)).lineLimit(1).minimumScaleFactor(0.7)
                                     .font(.system(size: 10, weight: .black)).tracking(0.8).foregroundStyle(Color.busCream.opacity(0.6))
                                 Text(watch.ride?.destinationName ?? stop?.name ?? "Your stop").font(.system(size: 15, weight: .heavy)).lineLimit(1)
                                 Text(line(status)).font(.system(size: 14, weight: .black)).foregroundStyle(color(status?.phase))

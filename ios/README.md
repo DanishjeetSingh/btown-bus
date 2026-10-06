@@ -59,7 +59,7 @@ The Map tab also has a **you + bus** button while you're tracking, which frames 
 
 Ride progress moves forward from the bus feed (its next stop) and from your phone's GPS (arriving at a stop, then leaving it), one stop at a time, so a stop the route passes twice can't make it skip ahead. Your phone's position is never shown as the bus.
 
-Walking directions use the fastest Apple Maps route; **Use a different walking route** picks another, remembered for that stop. Guidance is silent; **Apple Maps** hands off to Apple's spoken directions.
+**Start walking** opens turn-by-turn walking like Apple Maps: a tilted 3D map that follows you and turns as you do, the next turn at the top, and your walk against the bus at the bottom ("4 min to spare"). It keeps the screen awake and buzzes at each turn. Walking directions use the fastest Apple Maps route; **Use a different walking route** picks another, remembered for that stop. Guidance is silent; **Apple Maps** hands off to Apple's spoken directions.
 
 ## How stops away is counted
 

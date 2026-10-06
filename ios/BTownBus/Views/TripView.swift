@@ -16,6 +16,7 @@ struct TripView: View {
     @State private var choosingDestination = false
     @State private var showSteps = false
     @State private var trackTarget: TransitArrival?
+    @State private var navigating = false
 
     enum Stage { case walking, missed, riding }
 
@@ -109,7 +110,10 @@ struct TripView: View {
             }
         }
         .onAppear(perform: startWalkingIfNeeded)
-        .onDisappear { guide.stop() }
+        .onDisappear { if !navigating { guide.stop() } }
+        .fullScreenCover(isPresented: $navigating) {
+            if let pickup { WalkNavigationView(pickup: pickup, tracked: trip != nil) }
+        }
         .onChange(of: stage) { _, newStage in
             if newStage == .riding { guide.stop() } else { startWalkingIfNeeded() }
         }
@@ -133,13 +137,19 @@ struct TripView: View {
         if let trip {
             sectionLabel("YOUR BUS")
             busRow(trip: trip)
-            yellowButton("I'm on the bus", symbol: "bus.fill") { choosingDestination = true }
+            if atPickup {
+                yellowButton("I'm on the bus", symbol: "bus.fill") { choosingDestination = true }
+            } else {
+                yellowButton("Start walking", symbol: "location.north.line.fill") { navigating = true }
+                softButton("I'm on the bus", symbol: "bus.fill") { choosingDestination = true }
+            }
             HStack(spacing: 8) {
                 softButton("Steps", symbol: "list.bullet") { showSteps = true }.disabled(guide.steps.isEmpty)
                 softButton("Apple Maps", symbol: "map") { openInMaps() }
                 softButton("Stop", symbol: "xmark") { tracker.stop(); dismiss() }
             }
         } else if let pickup {
+            if !atPickup { yellowButton("Start walking", symbol: "location.north.line.fill") { navigating = true } }
             sectionLabel("ARRIVING")
             let arrivals = store.arrivals(at: pickup.id)
             if arrivals.isEmpty {
