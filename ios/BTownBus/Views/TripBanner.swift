@@ -54,7 +54,13 @@ struct TripBanner: View {
                     Text(problem).font(.system(size: 11.5, weight: .semibold)).foregroundStyle(Color.busCream.opacity(0.6))
                 }
             }
-            .fullScreenCover(isPresented: $showTrip) { TripView() }
+            .sheet(isPresented: $showTrip) {
+                TripView()
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+                    .presentationCornerRadius(28)
+                    .presentationBackground(Theme.surface)
+            }
             .padding(12)
             .background(Color.busInk, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Color.black, lineWidth: 3))

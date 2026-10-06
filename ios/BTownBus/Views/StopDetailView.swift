@@ -18,15 +18,15 @@ struct StopDetailView: View {
                 header
                 HStack(spacing: 8) {
                     FavoriteToggle(stop: stop)
+                    Button { showWalking = true } label: {
+                        Label(here ? "Map" : "Walk here", systemImage: here ? "map" : "figure.walk")
+                            .font(.system(size: 15, weight: .black)).foregroundStyle(Theme.ink)
+                            .frame(maxWidth: .infinity).frame(height: 46)
+                            .chunky(fill: Theme.soft, radius: 15, lift: 2)
+                    }
+                    .buttonStyle(PressStyle())
                 }
                 walkStrip(here: here, walk: walk)
-                Button { showWalking = true } label: {
-                    Label("Walk to stop", systemImage: "figure.walk")
-                        .font(.system(size: 17, weight: .black)).foregroundStyle(Color.busInk)
-                        .frame(maxWidth: .infinity).frame(height: 50)
-                        .chunky(fill: .busYellow, radius: 15)
-                }
-                .buttonStyle(PressStyle())
                 if let first = arrivals.first, let plan = TripMath.leavePlan(busArrival: first.predictedArrival, walkSeconds: walk, atStop: here) {
                     LeaveCard(arrival: first, route: store.route(first.routeKey), plan: plan)
                 }
@@ -48,8 +48,11 @@ struct StopDetailView: View {
             .padding(.horizontal, 16).padding(.top, 22).padding(.bottom, 30)
         }
         .background(Theme.surface)
-        .fullScreenCover(isPresented: $showWalking) {
+        .sheet(isPresented: $showWalking) {
             TripView(walkOnlyStop: stop)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(Theme.surface)
         }
         .sheet(item: $trackTarget) { arrival in
             TrackSheet(stop: stop, arrival: arrival) { dismiss() }
@@ -144,6 +147,19 @@ struct LeaveCard: View {
             case .leaveSoon: return ("WHEN TO GO", plan.minutesUntilLeave >= 60 ? "Leave at \(shortClock(plan.leaveAt))" : "Leave in \(plan.minutesUntilLeave) min", "Leave by \(plan.leaveAt.clock) for the \(arrival.predictedArrival.clock) \(name)", .busYellow, .busInk)
             }
         }()
+        StatusCard(kicker: kicker, title: title, sub: sub, fill: fill, ink: ink)
+    }
+}
+
+/// The big "When to go" card. Also used for the trip screen's headline states.
+struct StatusCard: View {
+    let kicker: String
+    let title: String
+    let sub: String
+    let fill: Color
+    let ink: Color
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(kicker).font(.system(size: 11.5, weight: .black)).tracking(1).opacity(0.75)
             Text(title).font(Theme.display(32)).lineLimit(1).minimumScaleFactor(0.6)

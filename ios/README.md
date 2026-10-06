@@ -49,15 +49,17 @@ In the simulator, use Features → Location to fake a position near a stop and t
 
 ## The trip screen
 
-Tap the trip banner (or **Walk to stop** on any stop) for the full-screen trip view. It has three stages:
+Tap the trip banner (or **Walk here** on any stop) to open the trip sheet. It's laid out like a stop's page: a header, a live map card, then the usual cards and rows. The map card keeps you, your stop (yellow dot), and the bus in view as they move; pan it to look around, and tap the corner button to bring all three back.
 
-- **Walking to the stop.** The map shows your walking route, you, your stop, and the bus with its route and the stops it still has to make before yours. A turn card at the top gives the next direction. The panel at the bottom is a race: one lane for your walk, one for the bus, and a line that says who gets there first ("3 min to spare", "Tight · keep moving", "The bus gets there first · hurry"). From **Walk to stop** without a tracked bus, the race is against the next bus due at that stop, with a button to track it.
-- **I'm on the bus.** Pick where you're getting off from the stops this bus will actually make next, drawn as a line diagram. If the bus has already pulled away when the app notices, it asks whether you caught it; **Missed it** switches to the next bus on the route.
-- **Riding.** The panel lists the stops left with yours marked. When yours is next, the top card turns into **Ring the bell** and you get a notification and Live Activity alert. Near your stop it says **Get off here**. Change your stop or end the trip from the ⋯ menu.
+- **Walking to the stop.** The next turn from Apple Maps walking directions, the When-to-go card for your bus, and the bus with how many stops away it is. From **Walk here** without a tracked bus, it lists the buses due at that stop with **Track** buttons.
+- **I'm on the bus.** Pick where you're getting off from the stops this bus will actually make next. If the bus has already pulled away when the app notices, it asks whether you caught it; **Missed it** switches to the next bus on the route.
+- **Riding.** A count of stops to go, the stops left with yours marked, and a **Ring the bell** card (plus a notification and Live Activity alert) when yours is next. Near your stop it says **Get off here**.
+
+The Map tab also has a **you + bus** button while you're tracking, which frames you and the bus together and follows both until you pan.
 
 Ride progress moves forward from the bus feed (its next stop) and from your phone's GPS (arriving at a stop, then leaving it), one stop at a time, so a stop the route passes twice can't make it skip ahead. Your phone's position is never shown as the bus.
 
-Walking directions come from Apple Maps. The fastest route is used by default; **Change walking route** in the ⋯ menu lets you pick another, and that choice is remembered for the stop. Guidance is silent; **Walk with Apple Maps** hands off to Apple's spoken directions. During a tracked trip the bus Live Activity covers the walk too; a walk without a tracked bus gets its own walking Live Activity.
+Walking directions use the fastest Apple Maps route; **Use a different walking route** picks another, remembered for that stop. Guidance is silent; **Apple Maps** hands off to Apple's spoken directions.
 
 ## How stops away is counted
 
