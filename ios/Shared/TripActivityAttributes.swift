@@ -17,6 +17,7 @@ struct TripActivityAttributes: ActivityAttributes {
         /// The bus has passed your stop.
         case departed
         /// The feed has no prediction for this bus right now.
+        case boarding, riding, requestStop, getOff
         case noPrediction
     }
 
@@ -27,6 +28,7 @@ struct TripActivityAttributes: ActivityAttributes {
         var walkSeconds: Int?
         var leaveAt: Date?
         var updatedAt: Date
+        var destinationName: String? = nil
     }
 
     var routeShortName: String

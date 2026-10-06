@@ -10,8 +10,8 @@ for (const [label, base] of feeds) {
     if (response.headers.get('access-control-allow-origin') !== '*') throw new Error(`${label} ${service} is not browser-readable`);
     return response.json();
   };
-  const [routes, stops, vehicles] = await Promise.all([
-    request('get_routes'), request('get_stops'), request('get_vehicles', '&includeETAData=1&orderedETAArray=1'),
+  const [routes, stops, vehicles, patterns] = await Promise.all([
+    request('get_routes'), request('get_stops'), request('get_vehicles', '&includeETAData=1&orderedETAArray=1'), request('get_patterns'),
   ]);
   const routeList = routes.get_routes ?? [];
   const stopList = stops.get_stops ?? [];
@@ -20,6 +20,7 @@ for (const [label, base] of feeds) {
   const arrivals = candidateStop ? await request('get_stop_etas', `&stopIDs=${encodeURIComponent(candidateStop.id)}`) : { get_stop_etas: [] };
   console.log(label);
   console.log(`- routes: ${routeList.length}`);
+  console.log(`- direction/branch patterns: ${(patterns.get_patterns ?? []).length}`);
   console.log(`- stops: ${new Set(stopList.map((stop) => String(stop.id))).size}`);
   console.log(`- active vehicles: ${activeVehicles.length}`);
   console.log(`- realtime arrivals: ${arrivals.get_stop_etas ? 'working' : 'unavailable'}`);

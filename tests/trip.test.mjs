@@ -1,20 +1,34 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { isAtStop, leavePlan, resolveTrip, stopsAway } from '../src/transit/trip.ts';
+import { isAtStop, leavePlan, resolveTrip, vehicleStopsAway } from '../src/transit/trip.ts';
 
 const loop = ['42', '43', '44', '45', '46', '47'];
 
-test('stops away counts forward along the route, including the target', () => {
-  assert.equal(stopsAway(loop, '44', '44'), 1);
-  assert.equal(stopsAway(loop, '43', '47'), 5);
-  // Loops wrap around past the end of the list.
-  assert.equal(stopsAway(loop, '46', '43'), 4);
-  assert.equal(stopsAway(loop, '99', '43'), undefined);
-  assert.equal(stopsAway(undefined, '42', '43'), undefined);
+const count = (stops, next, target, loops = false, upcoming = []) => vehicleStopsAway(
+  { patterns: [{ id: 'p', name: 'Outbound', stopIds: stops, loops }] },
+  { patternId: 'p', nextStopId: next, nextStops: upcoming.map(stopId => ({ stopId, minutes: 1 })) }, target,
+);
+
+test('counts only the active direction and never wraps a non-loop route', () => {
+  assert.equal(count(loop, '44', '44'), 1);
+  assert.equal(count(loop, '43', '47'), 5);
+  assert.equal(count(loop, '46', '43'), undefined);
+  assert.equal(count(loop, '46', '43', true), 4);
+  const route = { stopIds: Array.from({ length: 25 }, (_, i) => String(i)), patterns: [
+    { id: 'out', name: 'Outbound', stopIds: Array.from({ length: 10 }, (_, i) => String(i * 2)), loops: false },
+    { id: 'in', name: 'Inbound', stopIds: ['19', '17', '15'], loops: false },
+  ] };
+  assert.equal(vehicleStopsAway(route, { patternId: 'out', nextStopId: '0' }, '18'), 10);
+  assert.equal(vehicleStopsAway(route, { patternId: 'in', nextStopId: '19' }, '18'), undefined);
+  assert.equal(vehicleStopsAway(route, { nextStopId: '0' }, '18'), undefined);
 });
 
-test('stops away picks the nearest occurrence when a stop repeats', () => {
-  assert.equal(stopsAway(['1', '2', '3', '2', '4'], '3', '2'), 2);
+test('uses live upcoming visits before static patterns, and rejects ambiguous visits', () => {
+  assert.equal(count(['1', '2', '3', '2', '4'], '2', '4'), undefined);
+  assert.equal(count(['1', '2', '3', '2', '4'], '2', '4', false, ['2', '4']), 2);
+  assert.equal(count(['1', '2', '3', '4'], '1', '4', false, ['1', '3']), undefined);
+  assert.equal(count(['1', '2', '3', '1'], '3', '2', true, ['3', '1']), 3);
+  assert.equal(vehicleStopsAway(undefined, { nextStops: [{ stopId: 'a' }, { stopId: 'b' }] }, 'b'), 2);
 });
 
 test('at-stop allows for GPS accuracy but caps it', () => {
@@ -38,8 +52,8 @@ test('a tracked trip follows its bus, then falls back to the next one on the rou
     { agency: 'iu', routeId: '32', stopId: '45', vehicleId: '667', predictedArrival: 120_000, freshness: 'live' },
     { agency: 'iu', routeId: '32', stopId: '45', vehicleId: '668', predictedArrival: 300_000, freshness: 'live' },
   ];
-  const vehicles = [{ agency: 'iu', id: '668', nextStopId: '43', lat: 0, lng: 0, updatedAt: 0, freshness: 'live' }];
-  const route = { agency: 'iu', id: '32', shortName: 'B', stopIds: loop };
+  const vehicles = [{ agency: 'iu', id: '668', patternId: 'p', nextStopId: '43', lat: 0, lng: 0, updatedAt: 0, freshness: 'live' }];
+  const route = { agency: 'iu', id: '32', shortName: 'B', stopIds: loop, patterns: [{ id: 'p', name: 'B', stopIds: loop, loops: true }] };
   const followed = resolveTrip(trip, arrivals, vehicles, route, 0);
   assert.equal(followed.arrival.vehicleId, '668');
   assert.equal(followed.stopsAway, 3);

@@ -9,8 +9,9 @@ export interface TransitRoute {
   color?: string;
   textColor?: string;
   paths?: [number, number][][];
-  /** Stop IDs in the order the route serves them. */
+  /** Route membership; may combine directions/branches. Use active patterns for progress. */
   stopIds?: string[];
+  patterns?: { id: string; name: string; stopIds: string[]; loops: boolean }[];
 }
 
 export interface TransitStop {
@@ -27,6 +28,7 @@ export interface TransitVehicle {
   id: string;
   routeId?: string;
   tripId?: string;
+  patternId?: string;
   lat: number;
   lng: number;
   heading?: number;

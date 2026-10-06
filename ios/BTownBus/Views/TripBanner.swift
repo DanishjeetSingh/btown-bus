@@ -4,12 +4,13 @@ import SwiftUI
 struct TripBanner: View {
     @Environment(AppStore.self) private var store
     @Environment(TripTracker.self) private var tracker
+    @State private var showJourney = false
     let open: (TransitStop) -> Void
 
     var body: some View {
         if let watch = tracker.watch {
             let route = store.route(watch.routeKey)
-            let stop = store.stop(watch.stopKey)
+            let stop = store.stop(watch.ride.map { TransitKey(agency: watch.agency, id: $0.destinationId) } ?? watch.stopKey)
             let status = tracker.status
             let hex = route?.colorHex ?? watch.agency.colorHex
             VStack(alignment: .leading, spacing: 10) {
@@ -24,7 +25,7 @@ struct TripBanner: View {
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(tracker.activityRunning ? "LIVE ACTIVITY ON" : "LIVE AT \(watch.threshold) STOPS AWAY")
                                     .font(.system(size: 10, weight: .black)).tracking(0.8).foregroundStyle(Color.busCream.opacity(0.6))
-                                Text(stop?.name ?? "Your stop").font(.system(size: 15, weight: .heavy)).lineLimit(1)
+                                Text(watch.ride?.destinationName ?? stop?.name ?? "Your stop").font(.system(size: 15, weight: .heavy)).lineLimit(1)
                                 Text(line(status)).font(.system(size: 14, weight: .black)).foregroundStyle(color(status?.phase))
                             }
                             .foregroundStyle(Color.busCream)
@@ -39,6 +40,8 @@ struct TripBanner: View {
                     }
                     .accessibilityLabel("Stop tracking")
                 }
+                Button(watch.ride == nil ? (status?.phase == .boarding || status?.phase == .arriving ? "Did you board? · Journey options" : "Walk to stop · I’m on board") : "Ride details · I got off") { showJourney = true }
+                    .font(.system(size: 14, weight: .bold)).foregroundStyle(Color.busYellow)
                 if let away = status?.stopsAway {
                     HStack(spacing: 5) {
                         let total = max(watch.threshold, away, 1)
@@ -52,6 +55,7 @@ struct TripBanner: View {
                     Text(problem).font(.system(size: 11.5, weight: .semibold)).foregroundStyle(Color.busCream.opacity(0.6))
                 }
             }
+            .sheet(isPresented: $showJourney) { JourneyView() }
             .padding(12)
             .background(Color.busInk, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Color.black, lineWidth: 3))
@@ -62,6 +66,10 @@ struct TripBanner: View {
     private func line(_ status: TripStatus?) -> String {
         guard let status else { return "Checking the bus…" }
         switch status.phase {
+        case .boarding: return "Did you board?"
+        case .riding: return "Riding to your stop"
+        case .requestStop: return "Request your stop now"
+        case .getOff: return "Did you get off?"
         case .atStop: return "You're at the stop"
         case .leaveNow: return "Leave now"
         case .tooLate: return "Too late to walk it"
@@ -83,7 +91,9 @@ struct TripBanner: View {
     }
 
     @ViewBuilder private func countdown(_ status: TripStatus?) -> some View {
-        if let arrival = status?.arrival {
+        if let ride = tracker.watch?.ride {
+            Text("\(ride.remainingStops)").font(Theme.display(30)).foregroundStyle(Color.busYellow)
+        } else if let arrival = status?.arrival {
             let minutes = arrival.minutes()
             Group {
                 if minutes == 0 { Text("Now") }

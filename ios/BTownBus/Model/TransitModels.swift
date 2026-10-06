@@ -33,13 +33,21 @@ struct TransitRoute: Identifiable, Hashable {
     var longName: String
     var colorHex: String
     var path: [CLLocationCoordinate2D]
-    /// Stop IDs in the order the route serves them.
+    /// Route membership list; may combine directions/branches. Use vehicle patterns for progress.
     var stopIds: [String]
+    var patterns: [TransitPattern] = []
 
     var id: TransitKey { TransitKey(agency: agency, id: routeId) }
 
     static func == (a: Self, b: Self) -> Bool { a.id == b.id }
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
+}
+
+struct TransitPattern: Hashable {
+    var id: String
+    var name: String
+    var stopIds: [String]
+    var loops: Bool
 }
 
 struct TransitStop: Identifiable, Hashable {
@@ -66,6 +74,8 @@ struct TransitVehicle: Identifiable, Hashable {
     var nextStopId: String?
     var load: Int?
     var capacity: Int?
+    var patternId: String? = nil
+    var nextStops: [String] = []
     var updatedAt: Date
 
     var id: TransitKey { TransitKey(agency: agency, id: vehicleId) }

@@ -4,6 +4,7 @@ import MapKit
 struct MapScreen: View {
     @Environment(AppStore.self) private var store
     @Environment(TripTracker.self) private var tracker
+    @State private var walking = WalkingGuide.shared
     @Binding var openStop: TransitStop?
     @Namespace private var mapScope
     @State private var camera: MapCameraPosition = .region(MKCoordinateRegion(center: AppStore.downtown.coordinate, latitudinalMeters: 5000, longitudinalMeters: 5000))
@@ -46,6 +47,9 @@ struct MapScreen: View {
                               stale: bus.isStale, tracked: tracker.watch?.vehicleId == bus.vehicleId && tracker.watch?.agency == bus.agency)
                 }
                 .annotationTitles(.hidden)
+            }
+            if let walking = walking.route {
+                MapPolyline(walking.polyline).stroke(.blue, style: StrokeStyle(lineWidth: 5, dash: [8, 4]))
             }
             UserAnnotation()
         }

@@ -6,6 +6,7 @@ struct StopDetailView: View {
     @Environment(TripTracker.self) private var tracker
     @Environment(\.dismiss) private var dismiss
     let stop: TransitStop
+    @State private var showWalking = false
     @State private var trackTarget: TransitArrival?
 
     var body: some View {
@@ -19,6 +20,13 @@ struct StopDetailView: View {
                     FavoriteToggle(stop: stop)
                 }
                 walkStrip(here: here, walk: walk)
+                Button { showWalking = true } label: {
+                    Label("Walk to stop", systemImage: "figure.walk")
+                        .font(.system(size: 17, weight: .black)).foregroundStyle(Color.busInk)
+                        .frame(maxWidth: .infinity).frame(height: 50)
+                        .chunky(fill: .busYellow, radius: 15)
+                }
+                .buttonStyle(PressStyle())
                 if let first = arrivals.first, let plan = TripMath.leavePlan(busArrival: first.predictedArrival, walkSeconds: walk, atStop: here) {
                     LeaveCard(arrival: first, route: store.route(first.routeKey), plan: plan)
                 }
@@ -40,6 +48,9 @@ struct StopDetailView: View {
             .padding(.horizontal, 16).padding(.top, 22).padding(.bottom, 30)
         }
         .background(Theme.surface)
+        .fullScreenCover(isPresented: $showWalking) {
+            WalkDirectionsView(stop: stop)
+        }
         .sheet(item: $trackTarget) { arrival in
             TrackSheet(stop: stop, arrival: arrival) { dismiss() }
                 .presentationDetents([.medium, .large])
@@ -238,7 +249,7 @@ struct TrackSheet: View {
                     .chunky(fill: .busYellow, radius: 16)
             }
             .buttonStyle(PressStyle())
-            Text("Keeps location on in the background while tracking (you'll see the blue location pill), so the walk time stays current and it knows when you reach the stop. Stops by itself after the bus passes.")
+            Text("Keeps location on in the background while tracking (you'll see the blue location pill), so the walk time stays current and it knows when you reach the stop. Confirm boarding to continue in ride mode and get a reminder for your destination.")
                 .font(.system(size: 11.5)).foregroundStyle(Theme.muted)
         }
         .padding(20)

@@ -6,6 +6,7 @@ import WidgetKit
 struct BTownBusWidgets: WidgetBundle {
     var body: some Widget {
         TripLiveActivity()
+        WalkingLiveActivity()
     }
 }
 
@@ -30,7 +31,7 @@ struct TripLiveActivity: Widget {
                 }
                 DynamicIslandExpandedRegion(.center) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(route.stopName).font(.system(size: 15, weight: .heavy)).lineLimit(1)
+                        Text(state.destinationName ?? route.stopName).font(.system(size: 15, weight: .heavy)).lineLimit(1)
                         Text(headline(state)).font(.system(size: 13, weight: .bold)).foregroundStyle(accent(state.phase)).lineLimit(1)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -72,7 +73,7 @@ struct LockScreenTripView: View {
             HStack(alignment: .center, spacing: 12) {
                 RouteBadge(name: route.routeShortName, hex: route.routeColorHex, size: 50)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(route.stopName)
+                    Text(state.destinationName ?? route.stopName)
                         .font(.system(size: 13, weight: .heavy))
                         .foregroundStyle(Color.busCream.opacity(0.7)).lineLimit(1)
                     Text(headline(state))
@@ -83,7 +84,7 @@ struct LockScreenTripView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .layoutPriority(1)
                 VStack(alignment: .trailing, spacing: 0) {
-                    Text("BUS IN").font(.system(size: 10, weight: .black)).tracking(0.8).foregroundStyle(Color.busCream.opacity(0.6))
+                    Text(state.destinationName == nil ? "BUS IN" : "STOPS LEFT").font(.system(size: 10, weight: .black)).tracking(0.8).foregroundStyle(Color.busCream.opacity(0.6))
                     BusCountdown(state: state, size: 28)
                 }
                 .frame(width: 92, alignment: .trailing)
@@ -107,6 +108,10 @@ struct LockScreenTripView: View {
 
 private func headline(_ state: TripActivityAttributes.ContentState) -> String {
     switch state.phase {
+    case .boarding: return "Did you board?"
+    case .riding: return "Riding to your stop"
+    case .requestStop: return "Request your stop now"
+    case .getOff: return "Did you get off?"
     case .atStop: return "You're at the stop"
     case .leaveNow: return "Leave now"
     case .tooLate: return "Too late to walk it"
@@ -159,7 +164,9 @@ struct BusCountdown: View {
 
     var body: some View {
         Group {
-            if state.phase == .departed {
+            if state.destinationName != nil {
+                Text(state.stopsAway.map(String.init) ?? "--")
+            } else if state.phase == .departed {
                 Text("Gone")
             } else if let arrival = state.busArrival, arrival > .now {
                 Text(timerInterval: Date.now...arrival, countsDown: true, showsHours: false)
@@ -204,7 +211,9 @@ struct WalkLine: View {
     var body: some View {
         HStack(spacing: 6) {
             Image(systemName: state.phase == .atStop ? "mappin.and.ellipse" : "figure.walk")
-            if state.phase == .atStop {
+            if state.destinationName != nil {
+                Text(state.phase == .getOff ? "Confirm when you leave the bus" : "Get off at your destination")
+            } else if state.phase == .atStop {
                 Text("You're here — stay put")
             } else if let walk = state.walkSeconds {
                 Text("\(max(1, Int((Double(walk) / 60).rounded()))) min walk to the stop")

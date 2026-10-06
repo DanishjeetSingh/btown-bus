@@ -1,5 +1,5 @@
 import type { TransitArrival, TransitRoute, TransitStop, TransitVehicle } from '@/src/transit/types';
-import { formatDistance, leavePlan, stopsAway, type TrackedTrip } from '@/src/transit/trip';
+import { formatDistance, leavePlan, vehicleStopsAway, type TrackedTrip } from '@/src/transit/trip';
 import type { LocationStatus } from '../hooks/useLiveLocation';
 import { agencyName, clockTime, minutesUntil, routeKey, routeStyle, shortClock } from '../lib/ui';
 import { CloseIcon, LocateIcon, MapIcon, StarIcon, WalkIcon } from './icons';
@@ -67,7 +67,7 @@ export default function StopSheet(props: Props) {
         {arrivals.length ? arrivals.slice(0, 10).map((arrival, index) => {
           const route = routeMap.get(routeKey(arrival.agency, arrival.routeId));
           const vehicle = arrival.vehicleId ? vehicles.find((item) => item.agency === arrival.agency && item.id === arrival.vehicleId) : undefined;
-          const away = vehicle ? stopsAway(route?.stopIds, vehicle.nextStopId, stop.id) : undefined;
+          const away = vehicle ? vehicleStopsAway(route, vehicle, stop.id) : undefined;
           const minutes = minutesUntil(arrival.predictedArrival, now);
           const tracking = trip && trip.agency === arrival.agency && trip.stopId === arrival.stopId && trip.routeId === arrival.routeId && (!trip.vehicleId || trip.vehicleId === arrival.vehicleId);
           return <li className={`arrival-row ${tracking ? 'tracking' : ''}`} key={`${arrival.routeId}:${arrival.vehicleId ?? index}`} style={routeStyle(route, arrival.agency)}>

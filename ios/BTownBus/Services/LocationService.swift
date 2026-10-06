@@ -10,6 +10,7 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
     static let shared = LocationService()
 
     private(set) var location: CLLocation?
+    private(set) var heading: CLLocationDirection?
     private(set) var authorization: CLAuthorizationStatus = .notDetermined
     /// True while a trip keeps location running with the app in the background.
     private(set) var backgroundTracking = false
@@ -58,6 +59,18 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
         manager.allowsBackgroundLocationUpdates = on
         manager.showsBackgroundLocationIndicator = on
         if on { manager.startUpdatingLocation() }
+    }
+
+    func setWalkingNavigation(_ on: Bool) {
+        manager.desiredAccuracy = on ? kCLLocationAccuracyBestForNavigation : kCLLocationAccuracyNearestTenMeters
+        manager.distanceFilter = on ? 2 : 8
+        if on, CLLocationManager.headingAvailable() {
+            manager.headingFilter = 8
+            manager.startUpdatingHeading()
+        } else {
+            manager.stopUpdatingHeading()
+            heading = nil
+        }
     }
 
     func appDidEnterBackground() {
@@ -126,7 +139,15 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
         Task { @MainActor in
             if let current = location, current.timestamp > latest.timestamp { return }
             location = latest
+            // Update navigation and its Live Activity directly, including while locked.
+            WalkingGuide.shared.locationDidUpdate()
         }
+    }
+
+    nonisolated func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
+        guard newHeading.headingAccuracy >= 0 else { return }
+        let value = newHeading.trueHeading >= 0 ? newHeading.trueHeading : newHeading.magneticHeading
+        Task { @MainActor in heading = value }
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {

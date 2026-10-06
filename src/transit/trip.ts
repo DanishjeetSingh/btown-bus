@@ -31,23 +31,25 @@ export function isAtStop(distance: number, accuracy = 0) {
   return distance <= AT_STOP_RADIUS + Math.min(Math.max(accuracy, 0), 40);
 }
 
-/**
- * Stops left before the bus reaches `targetStopId`, counting the target:
- * 1 means your stop is the bus's next stop. Routes are treated as loops.
- */
-export function stopsAway(stopIds: string[] | undefined, nextStopId: string | undefined, targetStopId: string) {
-  if (!stopIds?.length || !nextStopId) return undefined;
-  const n = stopIds.length;
-  let best: number | undefined;
-  stopIds.forEach((from, i) => {
-    if (from !== nextStopId) return;
-    stopIds.forEach((to, j) => {
-      if (to !== targetStopId) return;
-      const gap = (j - i + n) % n;
-      if (best == null || gap < best) best = gap;
-    });
+/** Use the vehicle's actual direction/branch; a route stop list is not a trip itinerary. */
+export function vehicleStopsAway(route: TransitRoute | undefined, vehicle: TransitVehicle, target: string) {
+  const upcoming = vehicle.nextStops?.map((stop) => stop.stopId) ?? [];
+  const direct = upcoming.indexOf(target);
+  if (direct >= 0) return direct + 1;
+  const pattern = route?.patterns?.find((item) => item.id === vehicle.patternId);
+  if (!pattern || !vehicle.nextStopId) return undefined;
+  const visits = [...pattern.stopIds];
+  if (pattern.loops && visits.length > 1 && visits[0] === visits.at(-1)) visits.pop();
+  const candidates: number[] = [];
+  visits.forEach((stop, index) => {
+    if (stop !== vehicle.nextStopId) return;
+    const sequence = pattern.loops ? [...visits.slice(index), ...visits.slice(0, index)] : visits.slice(index);
+    // Disagreeing live predictions mean this static pattern cannot safely supply a count.
+    if (upcoming.some((id, offset) => sequence[offset] !== id)) return;
+    const destination = sequence.indexOf(target);
+    if (destination >= 0) candidates.push(destination + 1);
   });
-  return best == null ? undefined : best + 1;
+  return candidates.length && candidates.every((count) => count === candidates[0]) ? candidates[0] : undefined;
 }
 
 export type LeaveState = 'at-stop' | 'leave-now' | 'leave-soon' | 'too-late';
@@ -79,7 +81,7 @@ export function resolveTrip(trip: TrackedTrip, arrivals: TransitArrival[], vehic
   const vehicle = arrival?.vehicleId ? vehicles.find((item) => item.agency === trip.agency && item.id === arrival.vehicleId) : undefined;
   return {
     arrival, vehicle,
-    stopsAway: vehicle ? stopsAway(route?.stopIds, vehicle.nextStopId, trip.stopId) : undefined,
+    stopsAway: vehicle ? vehicleStopsAway(route, vehicle, trip.stopId) : undefined,
     minutes: arrival ? Math.max(0, Math.ceil((arrival.predictedArrival - now) / 60_000)) : undefined,
   };
 }

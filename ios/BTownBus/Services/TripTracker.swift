@@ -2,6 +2,8 @@ import Foundation
 import ActivityKit
 import UserNotifications
 import Observation
+import CoreLocation
+import UIKit
 
 /// A bus + stop the user asked to be told about.
 struct TripWatch: Codable, Equatable {
@@ -13,6 +15,7 @@ struct TripWatch: Codable, Equatable {
     /// Start the Live Activity once the bus is this many stops away.
     var threshold: Int
     var createdAt: Date
+    var ride: RideJourney? = nil
 
     var stopKey: TransitKey { TransitKey(agency: agency, id: stopId) }
     var routeKey: TransitKey { TransitKey(agency: agency, id: routeId) }
@@ -39,6 +42,9 @@ final class TripTracker {
 
     private(set) var watch: TripWatch?
     private(set) var status: TripStatus?
+    private(set) var rideProblem: String?
+    @ObservationIgnored private var lastRideFeedCheck = Date.distantPast
+    @ObservationIgnored private var rideVehicle: TransitVehicle?
     private(set) var activityRunning = false
     /// Why a Live Activity couldn't start, if it couldn't.
     private(set) var activityProblem: String?
@@ -74,6 +80,7 @@ final class TripTracker {
         endActivity(immediately: true)
         watch = newWatch
         status = nil
+        rideProblem = nil
         sawArrivingAt = nil
         lostBusSince = nil
         notified = []
@@ -91,8 +98,9 @@ final class TripTracker {
         endActivity(immediately: true)
         watch = nil
         status = nil
+        rideProblem = nil
         save()
-        LocationService.shared.setBackgroundTracking(false)
+        LocationService.shared.setBackgroundTracking(WalkingGuide.shared.destination != nil)
     }
 
     func isTracking(_ arrival: TransitArrival) -> Bool {
@@ -114,7 +122,7 @@ final class TripTracker {
             while !Task.isCancelled {
                 guard let self, self.watch != nil else { return }
                 await self.tick()
-                try? await Task.sleep(for: .seconds(self.activity == nil ? 15 : 10))
+                try? await Task.sleep(for: .seconds(self.watch?.ride != nil ? 2 : (self.activity == nil ? 15 : 10)))
             }
         }
     }
@@ -127,6 +135,7 @@ final class TripTracker {
         let now = Date()
         if now.timeIntervalSince(watch.createdAt) > Self.maxDuration { stop(); return }
 
+        if watch.ride != nil { await tickRide(watch); return }
         let client = TransitClient.shared
         guard let base = try? await client.routesAndStops(for: watch.agency),
               let stop = base.stops.first(where: { $0.stopId == watch.stopId }) else { return }
@@ -149,7 +158,8 @@ final class TripTracker {
         } else if arrival == nil {
             // The followed bus dropped out of the predictions: it has passed the stop, or the feed lost it.
             let lockedBus = watch.vehicleId.flatMap { id in vehicles.first { $0.vehicleId == id } }
-            if let sawArrivingAt, now.timeIntervalSince(sawArrivingAt) < 10 * 60, lockedBus?.nextStopId != watch.stopId {
+            if let sawArrivingAt, now.timeIntervalSince(sawArrivingAt) < 10 * 60,
+               let lockedBus, !lockedBus.isStale, let next = lockedBus.nextStopId, next != watch.stopId {
                 departed = true
             } else {
                 lostBusSince = lostBusSince ?? now
@@ -166,7 +176,7 @@ final class TripTracker {
         }
 
         let vehicle = arrival?.vehicleId.flatMap { id in vehicles.first { $0.vehicleId == id } }
-        let stopsAway = route.flatMap { TripMath.stopsAway(stopIds: $0.stopIds, nextStopId: vehicle?.nextStopId, target: watch.stopId) }
+        let stopsAway = vehicle.flatMap { TripMath.stopsAway(route: route, vehicle: $0, target: watch.stopId) }
         let location = LocationService.shared
         let atStop = location.isAtStop(stop)
         let walk = location.walkSeconds(to: stop)
@@ -198,7 +208,12 @@ final class TripTracker {
             || (plan.map { $0.state != .atStop && $0.leaveAt.timeIntervalSince(now) < 120 } ?? false)
 
         if phase == .departed {
-            finish(with: next, stop: stop)
+            status?.phase = .boarding
+            if !notified.contains("boarding") {
+                notified.insert("boarding")
+                post(title: "Did you board?", body: "Open B-Town Bus to confirm boarding or end this trip.")
+            }
+            if let activity, let status { await activity.update(content(for: status)) }
             return
         }
         if activity == nil, close, arrival != nil {
@@ -227,6 +242,89 @@ final class TripTracker {
         }
     }
     #endif
+
+    // MARK: Walking and riding
+
+    var boardingRoute: TransitRoute? {
+        guard let watch, var route = AppStore.shared.route(watch.routeKey),
+              let vehicle = AppStore.shared.vehicle(watch.agency, watch.vehicleId),
+              !vehicle.isStale,
+              let pattern = route.patterns.first(where: { $0.id == vehicle.patternId }) else { return nil }
+        route.stopIds = pattern.stopIds
+        if pattern.loops, route.stopIds.count > 1, route.stopIds.first == route.stopIds.last { route.stopIds.removeLast() }
+        // Refuse an itinerary that disagrees with the vehicle's live upcoming visits.
+        if !vehicle.nextStops.isEmpty {
+            let agrees = route.stopIds.indices.contains { index in
+                guard route.stopIds[index] == vehicle.nextStopId else { return false }
+                let sequence = pattern.loops ? Array(route.stopIds[index...]) + Array(route.stopIds[..<index]) : Array(route.stopIds[index...])
+                return vehicle.nextStops.enumerated().allSatisfy { offset, id in
+                    sequence.indices.contains(offset) && sequence[offset] == id
+                }
+            }
+            guard agrees else { return nil }
+        }
+        route.patterns = [pattern]
+        return route
+    }
+
+    @discardableResult
+    func board(pickupIndex: Int, destinationIndex: Int, patternId: String?) -> Bool {
+        guard var watch, watch.ride == nil,
+              let route = boardingRoute, route.patterns.first?.id == patternId,
+              route.stopIds.indices.contains(pickupIndex), route.stopIds[pickupIndex] == watch.stopId,
+              let journey = RideJourney.make(route: route, pickupIndex: pickupIndex,
+                                             destinationOffset: destinationIndex, loops: route.patterns.first?.loops ?? false, stops: AppStore.shared.stops) else { return false }
+        endActivity(immediately: true)
+        watch.ride = journey
+        self.watch = watch
+        status = nil
+        notified = []
+        rideVehicle = nil
+        lastRideFeedCheck = .distantPast
+        save()
+        startLoop()
+        return true
+    }
+
+    private func tickRide(_ snapshot: TripWatch) async {
+        guard var journey = snapshot.ride else { return }
+        let now = Date()
+        if now.timeIntervalSince(lastRideFeedCheck) >= 15 {
+            lastRideFeedCheck = now
+            let vehicles = (try? await TransitClient.shared.vehicles(for: snapshot.agency)) ?? []
+            guard watch == snapshot else { return }
+            rideVehicle = vehicles.first { $0.vehicleId == snapshot.vehicleId && $0.routeId == snapshot.routeId && !$0.isStale }
+        }
+        let stops = AppStore.shared.stops
+        let fix = LocationService.shared.freshLocation
+        let gpsTime = fix.flatMap { $0.horizontalAccuracy <= 35 && now.timeIntervalSince($0.timestamp) < 20 ? $0.timestamp : nil }
+        let feedTime = rideVehicle.flatMap { now.timeIntervalSince($0.updatedAt) < 30 ? $0.updatedAt : nil }
+        rideProblem = gpsTime == nil && feedTime == nil ? "Waiting for accurate GPS or a fresh bus update. Stop reminders may be delayed." : nil
+        journey.update(location: fix, vehicle: rideVehicle, stops: stops, agency: snapshot.agency, now: now)
+        guard var current = watch, current == snapshot else { return }
+        current.ride = journey
+        if current != snapshot {
+            watch = current
+            save()
+        }
+        let phase: TripActivityAttributes.Phase = journey.atDestination ? .getOff : journey.requestedStop ? .requestStop : .riding
+        let next = TripStatus(arrival: nil, stopsAway: journey.remainingStops, walkSeconds: nil,
+                              leaveAt: nil, atStop: false, phase: phase, checkedAt: [gpsTime, feedTime].compactMap { $0 }.max() ?? status?.checkedAt ?? snapshot.createdAt)
+        status = next
+        let route = AppStore.shared.route(snapshot.routeKey)
+        let destination = stops.first { $0.agency == snapshot.agency && $0.stopId == journey.destinationId }
+        if activity == nil, let destination { startActivity(watch: current, route: route, stop: destination, status: next) }
+        if let activity { await activity.update(content(for: next)) }
+        if journey.requestedStop, !notified.contains("requestStop") {
+            notified.insert("requestStop")
+            post(title: "Request your stop now", body: "Your next stop is \(journey.destinationName).")
+            UINotificationFeedbackGenerator().notificationOccurred(.warning)
+        }
+        if journey.atDestination, !notified.contains("getOff") {
+            notified.insert("getOff")
+            post(title: "Did you get off?", body: "You're near \(journey.destinationName). Confirm in B-Town Bus when you've left the bus.")
+        }
+    }
 
     // MARK: Live Activity
 
@@ -273,7 +371,8 @@ final class TripTracker {
     private func content(for status: TripStatus) -> ActivityContent<TripActivityAttributes.ContentState> {
         let state = TripActivityAttributes.ContentState(
             phase: status.phase, busArrival: status.arrival?.predictedArrival, stopsAway: status.stopsAway,
-            walkSeconds: status.walkSeconds, leaveAt: status.leaveAt, updatedAt: status.checkedAt)
+            walkSeconds: status.walkSeconds, leaveAt: status.leaveAt, updatedAt: status.checkedAt,
+            destinationName: watch?.ride?.destinationName)
         // If the app stops updating, iOS dims the activity instead of showing old times as fresh.
         return ActivityContent(state: state, staleDate: status.checkedAt.addingTimeInterval(3 * 60), relevanceScore: 100)
     }
@@ -288,24 +387,9 @@ final class TripTracker {
         }
     }
 
-    private func finish(with status: TripStatus, stop: TransitStop) {
-        loopTask?.cancel()
-        loopTask = nil
-        if let activity {
-            endingOnPurpose = true
-            Task {
-                await activity.end(content(for: status), dismissalPolicy: .after(Date().addingTimeInterval(2 * 60)))
-                endingOnPurpose = false
-            }
-        }
-        activity = nil
-        activityRunning = false
-        watch = nil
-        save()
-        LocationService.shared.setBackgroundTracking(false)
-    }
-
     private func endActivity(immediately: Bool) {
+        stateTask?.cancel()
+        stateTask = nil
         guard let activity else { return }
         endingOnPurpose = true
         self.activity = nil

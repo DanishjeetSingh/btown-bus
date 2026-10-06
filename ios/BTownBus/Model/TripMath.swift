@@ -17,18 +17,21 @@ enum TripMath {
         distance <= atStopRadius + min(max(accuracy, 0), 40)
     }
 
-    /// Stops left before the bus reaches `target`, counting the target (1 = your stop is next). Routes are loops.
-    static func stopsAway(stopIds: [String], nextStopId: String?, target: String) -> Int? {
-        guard !stopIds.isEmpty, let nextStopId else { return nil }
-        let n = stopIds.count
-        var best: Int?
-        for (i, from) in stopIds.enumerated() where from == nextStopId {
-            for (j, to) in stopIds.enumerated() where to == target {
-                let gap = (j - i + n) % n
-                if best == nil || gap < best! { best = gap }
-            }
+    /// Never infer a bus itinerary from a combined route stop list.
+    static func stopsAway(route: TransitRoute?, vehicle: TransitVehicle, target: String) -> Int? {
+        if let index = vehicle.nextStops.firstIndex(of: target) { return index + 1 }
+        guard let pattern = route?.patterns.first(where: { $0.id == vehicle.patternId }),
+              let next = vehicle.nextStopId else { return nil }
+        var visits = pattern.stopIds
+        if pattern.loops, visits.count > 1, visits.first == visits.last { visits.removeLast() }
+        var counts: [Int] = []
+        for index in visits.indices where visits[index] == next {
+            let sequence = pattern.loops ? Array(visits[index...]) + Array(visits[..<index]) : Array(visits[index...])
+            guard vehicle.nextStops.enumerated().allSatisfy({ offset, id in sequence.indices.contains(offset) && sequence[offset] == id }) else { continue }
+            if let targetIndex = sequence.firstIndex(of: target) { counts.append(targetIndex + 1) }
         }
-        return best.map { $0 + 1 }
+        guard let first = counts.first, counts.allSatisfy({ $0 == first }) else { return nil }
+        return first
     }
 
     enum LeaveState { case atStop, leaveNow, leaveSoon, tooLate }

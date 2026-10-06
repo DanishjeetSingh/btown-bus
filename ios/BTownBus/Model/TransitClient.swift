@@ -19,8 +19,10 @@ actor TransitClient {
         if let cached = staticData[agency] { return cached }
         async let routeData: RoutesResponse = request(agency, "get_routes")
         async let stopData: StopsResponse = request(agency, "get_stops")
+        async let patternRequest: PatternsResponse? = try? request(agency, "get_patterns")
         let (routesResponse, stopsResponse) = try await (routeData, stopData)
 
+        let patternsResponse = await patternRequest
         var stopRoutes: [String: [String]] = [:]
         for route in routesResponse.get_routes {
             for stopId in route.stops ?? [] { stopRoutes[stopId.value, default: []].append(route.id.value) }
@@ -32,7 +34,10 @@ actor TransitClient {
                 longName: route.name.trimmingCharacters(in: CharacterSet(charactersIn: "_ ")),
                 colorHex: normalizeColor(route.color, fallback: agency.colorHex),
                 path: route.encLine.map(decodePolyline) ?? [],
-                stopIds: (route.stops ?? []).map(\.value)
+                stopIds: (route.stops ?? []).map(\.value),
+                patterns: (patternsResponse?.get_patterns ?? []).filter { $0.routes.contains { $0.value == route.id.value } }.map {
+                    TransitPattern(id: $0.id.value, name: $0.name, stopIds: $0.stopIDs.map(\.value), loops: $0.type == 2)
+                }
             )
         }
         var seen = Set<String>()
@@ -42,7 +47,8 @@ actor TransitClient {
                                coordinate: CLLocationCoordinate2D(latitude: stop.lat.value, longitude: stop.lng.value),
                                routeIds: stopRoutes[stop.id.value] ?? [])
         }
-        staticData[agency] = (routes, stops)
+        // Retry optional pattern data after a transient failure, keeping routes usable.
+        if patternsResponse != nil { staticData[agency] = (routes, stops) }
         return (routes, stops)
     }
 
@@ -59,6 +65,7 @@ actor TransitClient {
                 heading: vehicle.h?.value, direction: vehicle.direction?.trimmingCharacters(in: .whitespaces),
                 nextStopId: nextStop,
                 load: vehicle.load.map { Int($0.value) }, capacity: vehicle.capacity.flatMap { $0.value > 0 ? Int($0.value) : nil },
+                patternId: vehicle.patternID?.value, nextStops: (vehicle.minutesToNextStops ?? []).map { $0.stopID.value },
                 updatedAt: Date(timeIntervalSince1970: vehicle.receiveTime.value / 1000)
             )
         }
@@ -138,6 +145,16 @@ private struct RoutesResponse: Decodable {
     struct Route: Decodable { let id: FlexString; let name: String; let abbr: String; let color: String?; let stops: [FlexString]?; let encLine: String? }
     let get_routes: [Route]
 }
+private struct PatternsResponse: Decodable {
+    struct Pattern: Decodable {
+        let id: FlexString
+        let name: String
+        let type: Int
+        let routes: [FlexString]
+        let stopIDs: [FlexString]
+    }
+    let get_patterns: [Pattern]
+}
 private struct StopsResponse: Decodable {
     struct Stop: Decodable { let id: FlexString; let name: String; let lat: FlexDouble; let lng: FlexDouble }
     let get_stops: [Stop]
@@ -145,7 +162,7 @@ private struct StopsResponse: Decodable {
 private struct VehiclesResponse: Decodable {
     struct NextStop: Decodable { let stopID: FlexString; let minutes: FlexDouble }
     struct Vehicle: Decodable {
-        let routeID: FlexString?; let equipmentID: FlexString; let lat: FlexDouble; let lng: FlexDouble
+        let patternID: FlexString?; let routeID: FlexString?; let equipmentID: FlexString; let lat: FlexDouble; let lng: FlexDouble
         let h: FlexDouble?; let receiveTime: FlexDouble; let inService: FlexDouble?; let direction: String?
         let load: FlexDouble?; let capacity: FlexDouble?; let nextStopID: FlexString?; let minutesToNextStops: [NextStop]?
     }

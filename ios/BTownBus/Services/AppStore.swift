@@ -28,6 +28,7 @@ final class AppStore {
     private(set) var routeByKey: [TransitKey: TransitRoute] = [:]
     private(set) var stopByKey: [TransitKey: TransitStop] = [:]
     @ObservationIgnored private var pollTask: Task<Void, Never>?
+    @ObservationIgnored private var nearbyCache: (origin: CLLocation, routes: Set<TransitKey>, limit: Int, result: [(stop: TransitStop, distance: CLLocationDistance)])?
 
     init() {
         favorites = (UserDefaults.standard.stringArray(forKey: "favorites") ?? []).compactMap(TransitKey.init)
@@ -45,15 +46,21 @@ final class AppStore {
     }
     func stopsAway(for arrival: TransitArrival) -> Int? {
         guard let vehicle = vehicle(arrival.agency, arrival.vehicleId), let route = route(arrival.routeKey) else { return nil }
-        return TripMath.stopsAway(stopIds: route.stopIds, nextStopId: vehicle.nextStopId, target: arrival.stopId)
+        return TripMath.stopsAway(route: route, vehicle: vehicle, target: arrival.stopId)
     }
     var favoriteStops: [TransitStop] { favorites.compactMap { stopByKey[$0] } }
     func isFavorite(_ stop: TransitStop) -> Bool { favorites.contains(stop.id) }
 
     func nearbyStops(from origin: CLLocation?, limit: Int = 8) -> [(stop: TransitStop, distance: CLLocationDistance)] {
         let origin = origin ?? Self.downtown
+        // Re-sorting every stop on each GPS fix is wasted work; reuse the list until you've moved ~15 m.
+        if let cache = nearbyCache, cache.routes == activeRoutes, cache.limit == limit, cache.origin.distance(from: origin) < 15 {
+            return cache.result.map { (stop: $0.stop, distance: origin.distance(from: $0.stop.location)) }
+        }
         let pool = activeRoutes.isEmpty ? stops : stops.filter { stop in stop.routeIds.contains { activeRoutes.contains(TransitKey(agency: stop.agency, id: $0)) } }
-        return pool.map { ($0, origin.distance(from: $0.location)) }.sorted { $0.1 < $1.1 }.prefix(limit).map { (stop: $0.0, distance: $0.1) }
+        let result = pool.map { ($0, origin.distance(from: $0.location)) }.sorted { $0.1 < $1.1 }.prefix(limit).map { (stop: $0.0, distance: $0.1) }
+        nearbyCache = (origin, activeRoutes, limit, result)
+        return result
     }
 
     // MARK: Preferences
@@ -116,27 +123,44 @@ final class AppStore {
             }
         }
         for agency in Agency.allCases where !newRoutes.contains(where: { $0.agency == agency }) { failed.insert(agency) }
+        // Observation fires on every assignment, even of an equal value, and that redraws every
+        // screen (map included). So only assign what actually changed.
         if !newRoutes.isEmpty || routes.isEmpty {
             // Keep a failed agency's last data instead of blanking it.
-            let keptRoutes = routes.filter { failed.contains($0.agency) }
-            let keptStops = stops.filter { failed.contains($0.agency) }
-            routes = (newRoutes + keptRoutes).sorted { a, b in
+            let mergedRoutes = (newRoutes + routes.filter { failed.contains($0.agency) }).sorted { a, b in
                 a.agency != b.agency ? a.agency == .iu : a.shortName.localizedStandardCompare(b.shortName) == .orderedAscending
             }
-            stops = newStops + keptStops
-            vehicles = newVehicles
-            routeByKey = Dictionary(routes.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-            stopByKey = Dictionary(stops.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+            let mergedStops = newStops + stops.filter { failed.contains($0.agency) }
+            if mergedRoutes.map(\.id) != routes.map(\.id) || mergedRoutes.map(\.patterns) != routes.map(\.patterns) {
+                routes = mergedRoutes
+                routeByKey = Dictionary(mergedRoutes.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+            }
+            if mergedStops.map(\.id) != stops.map(\.id) {
+                stops = mergedStops
+                stopByKey = Dictionary(mergedStops.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+                nearbyCache = nil
+            }
+            let mergedVehicles = newVehicles + vehicles.filter { failed.contains($0.agency) }
+            if mergedVehicles != vehicles { vehicles = mergedVehicles }
         }
-        failedAgencies = failed
-        loaded = true
+        if failed != failedAgencies { failedAgencies = failed }
+        if !loaded { loaded = true }
 
         guard includeArrivals else { return }
         let wanted = wantedStops()
         guard !wanted.isEmpty else { return }
         if let next = try? await client.arrivals(for: Array(wanted)) {
-            arrivals = next
-            arrivalsLoadedFor = wanted
+            if !Self.sameArrivals(next, arrivals) { arrivals = next }
+            if wanted != arrivalsLoadedFor { arrivalsLoadedFor = wanted }
+        }
+    }
+
+    /// Feed times are whole minutes, so predictions within 30 s of the last ones aren't news.
+    private static func sameArrivals(_ a: [TransitArrival], _ b: [TransitArrival]) -> Bool {
+        guard a.count == b.count else { return false }
+        return zip(a, b).allSatisfy { x, y in
+            x.id.hasPrefix("\(y.agency.rawValue):\(y.stopId):\(y.routeId):") && x.vehicleId == y.vehicleId
+                && x.destination == y.destination && abs(x.predictedArrival.timeIntervalSince(y.predictedArrival)) < 30
         }
     }
 

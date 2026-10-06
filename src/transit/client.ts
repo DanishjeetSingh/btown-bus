@@ -15,6 +15,7 @@ const routeSchema = z.object({
 const stopSchema = z.object({ id: z.union([z.string(), z.number()]), name: z.string(), lat: z.coerce.number(), lng: z.coerce.number() });
 const vehicleSchema = z.object({
   routeID: z.union([z.string(), z.number()]).optional(), equipmentID: z.union([z.string(), z.number()]),
+  patternID: z.union([z.string(), z.number()]).nullable().optional(),
   tripID: z.union([z.string(), z.number()]).nullable().optional(), lat: z.coerce.number(), lng: z.coerce.number(),
   h: z.coerce.number().optional(), receiveTime: z.coerce.number(), inService: z.coerce.number().optional(),
   direction: z.string().optional(), load: z.coerce.number().nullable().optional(), capacity: z.coerce.number().nullable().optional(),
@@ -26,6 +27,10 @@ const etaSchema = z.object({
   equipmentID: z.union([z.string(), z.number()]).nullable().optional(), minutes: z.coerce.number(), direction: z.string().optional(),
 });
 const routesResponse = z.object({ get_routes: z.array(routeSchema) });
+const patternsResponse = z.object({ get_patterns: z.array(z.object({
+  id: z.union([z.string(), z.number()]), name: z.string(), type: z.coerce.number(),
+  routes: z.array(z.union([z.string(), z.number()])), stopIDs: z.array(z.union([z.string(), z.number()])),
+})) });
 const stopsResponse = z.object({ get_stops: z.array(stopSchema) });
 const vehiclesResponse = z.object({ get_vehicles: z.array(vehicleSchema) });
 const arrivalsResponse = z.object({
@@ -43,7 +48,7 @@ async function request<T>(agency: AgencyId, service: string, schema: z.ZodType<T
 function getAgencyStaticData(agency: AgencyId) {
   const cached = staticAgencyData.get(agency);
   if (cached) return cached;
-  const pending = Promise.all([request(agency, 'get_routes', routesResponse), request(agency, 'get_stops', stopsResponse)]).then(([routeData, stopData]) => {
+  const pending = Promise.all([request(agency, 'get_routes', routesResponse), request(agency, 'get_stops', stopsResponse), request(agency, 'get_patterns', patternsResponse).catch(() => ({ get_patterns: [] }))]).then(([routeData, stopData, patternData]) => {
     const stopRoutes = new Map<string, string[]>();
     for (const route of routeData.get_routes) for (const rawStopId of route.stops) {
       const stopId = String(rawStopId);
@@ -54,6 +59,8 @@ function getAgencyStaticData(agency: AgencyId) {
       color: normalizeColor(route.color, agency === 'iu' ? '#990000' : '#006298'), textColor: '#ffffff',
       paths: route.encLine ? [decodePolyline(route.encLine)] : [],
       stopIds: route.stops.map(String),
+      patterns: patternData.get_patterns.filter((pattern) => pattern.routes.map(String).includes(String(route.id)))
+        .map((pattern) => ({ id: String(pattern.id), name: pattern.name, stopIds: pattern.stopIDs.map(String), loops: pattern.type === 2 })),
     }));
     const stops: TransitStop[] = [...new Map(stopData.get_stops.map((stop) => [String(stop.id), {
       agency, id: String(stop.id), name: stop.name, lat: stop.lat, lng: stop.lng, routeIds: stopRoutes.get(String(stop.id)) ?? [],
@@ -61,6 +68,9 @@ function getAgencyStaticData(agency: AgencyId) {
     return { routes, stops };
   });
   staticAgencyData.set(agency, pending);
+  void pending.then((data) => {
+    if (!data.routes.some((route) => route.patterns?.length) && staticAgencyData.get(agency) === pending) staticAgencyData.delete(agency);
+  }).catch(() => {});
   void pending.catch(() => { if (staticAgencyData.get(agency) === pending) staticAgencyData.delete(agency); });
   return pending;
 }
@@ -73,6 +83,7 @@ async function getAgencySnapshot(agency: AgencyId): Promise<TransitSnapshot> {
     .filter((vehicle) => vehicle.inService !== 0 && vehicle.lat !== 0 && vehicle.lng !== 0)
     .map((vehicle) => ({
       agency, id: String(vehicle.equipmentID), routeId: vehicle.routeID == null ? undefined : String(vehicle.routeID),
+      patternId: vehicle.patternID == null ? undefined : String(vehicle.patternID),
       tripId: vehicle.tripID == null ? undefined : String(vehicle.tripID), lat: vehicle.lat, lng: vehicle.lng,
       heading: vehicle.h, updatedAt: vehicle.receiveTime, freshness: realtimeFreshness(vehicle.receiveTime),
       direction: vehicle.direction?.trim() || undefined,
