@@ -32,6 +32,8 @@ final class WalkingGuide: NSObject {
     @ObservationIgnored private var offRouteFixes = 0
     @ObservationIgnored private var lastRequest = Date.distantPast
     @ObservationIgnored private var waitingForLocation = false
+    @ObservationIgnored private var waitingSince: Date?
+    @ObservationIgnored private var retryTask: Task<Void, Never>?
     @ObservationIgnored private var requestTask: Task<Void, Never>?
     @ObservationIgnored private var showsLiveActivity = true
 
@@ -50,6 +52,8 @@ final class WalkingGuide: NSObject {
         endActivity()
         activityProblem = nil
         requestTask?.cancel()
+        retryTask?.cancel()
+        waitingSince = nil
         destination = stop
         route = nil
         alternatives = []
@@ -70,6 +74,8 @@ final class WalkingGuide: NSObject {
     }
 
     func stop() {
+        retryTask?.cancel()
+        waitingSince = nil
         endActivity()
         requestTask?.cancel()
         requestTask = nil
@@ -96,12 +102,31 @@ final class WalkingGuide: NSObject {
             problem = "Location is blocked. Enable location in Settings or open Apple Maps."
             return
         }
-        guard let origin = location.freshLocation, origin.horizontalAccuracy <= 100,
-              Date().timeIntervalSince(origin.timestamp) < 20 else {
+        if location.isApproximate { location.requestPreciseForWalking() }
+        // A route only needs a rough start: progress snaps to it as better fixes arrive. Prefer a
+        // recent, decent fix, but after a few seconds settle for whatever position we have.
+        let waited = waitingSince.map { Date().timeIntervalSince($0) } ?? 0
+        let candidate = location.location
+        let good = candidate.map { $0.horizontalAccuracy <= 150 && Date().timeIntervalSince($0.timestamp) < 120 } ?? false
+        let usable = candidate.map { waited >= 6 && Date().timeIntervalSince($0.timestamp) < 15 * 60 } ?? false
+        guard let origin = candidate, good || usable else {
             waitingForLocation = true
-            problem = "Waiting for an accurate GPS position…"
+            if waitingSince == nil { waitingSince = Date() }
+            problem = location.isApproximate
+                ? "Precise Location is off for B-Town Bus. Turn it on in Settings for walking directions."
+                : "Finding your location…"
+            location.requestFreshFix()
+            // Try again even if no new fix arrives, so this never waits forever.
+            retryTask?.cancel()
+            retryTask = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(3))
+                guard let self, !Task.isCancelled, self.waitingForLocation, self.route == nil else { return }
+                self.refresh()
+            }
             return
         }
+        waitingSince = nil
+        retryTask?.cancel()
         loading = true
         lastRequest = Date()
         problem = nil

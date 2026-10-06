@@ -35,6 +35,21 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
 
     var isAuthorized: Bool { authorization == .authorizedWhenInUse || authorization == .authorizedAlways }
     var isDenied: Bool { authorization == .denied || authorization == .restricted }
+    /// Precise Location is off for the app: fixes are only good to about a kilometre.
+    var isApproximate: Bool { isAuthorized && manager.accuracyAuthorization == .reducedAccuracy }
+
+    /// Ask for one new fix now, instead of waiting for the next movement-triggered update.
+    func requestFreshFix() {
+        guard isAuthorized else { return }
+        manager.startUpdatingLocation()
+        manager.requestLocation()
+    }
+
+    /// Walking directions need a precise position; ask for it just this once if it's off.
+    func requestPreciseForWalking() {
+        guard isApproximate else { return }
+        manager.requestTemporaryFullAccuracyAuthorization(withPurposeKey: "Walking")
+    }
 
     /// A fix newer than two minutes; older ones are never used for "you're at the stop".
     var freshLocation: CLLocation? {
@@ -88,7 +103,8 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
     }
 
     func isAtStop(_ stop: TransitStop) -> Bool {
-        guard let fix = freshLocation else { return false }
+        // A rough fix (Precise Location off, or no GPS yet) can't tell you're at a stop.
+        guard let fix = freshLocation, fix.horizontalAccuracy <= 100 else { return false }
         return TripMath.isAtStop(distance: fix.distance(from: stop.location), accuracy: fix.horizontalAccuracy)
     }
 
@@ -135,9 +151,13 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard let latest = locations.last(where: { $0.horizontalAccuracy >= 0 && $0.horizontalAccuracy < 200 }) else { return }
+        guard let latest = locations.last(where: { $0.horizontalAccuracy >= 0 }) else { return }
         Task { @MainActor in
             if let current = location, current.timestamp > latest.timestamp { return }
+            // Skip a rough fix when a good one is only moments old; otherwise rough beats nothing
+            // (with Precise Location off, every fix is rough).
+            if latest.horizontalAccuracy >= 200, let current = location, current.horizontalAccuracy < 200,
+               latest.timestamp.timeIntervalSince(current.timestamp) < 60 { return }
             location = latest
             // Update navigation and its Live Activity directly, including while locked.
             WalkingGuide.shared.locationDidUpdate()

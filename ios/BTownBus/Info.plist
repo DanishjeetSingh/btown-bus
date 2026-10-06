@@ -24,6 +24,11 @@
 	<false/>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>While you're tracking a bus, B-Town Bus keeps checking your location so the Live Activity can update your walk time and notice when you reach the stop.</string>
+	<key>NSLocationTemporaryUsageDescriptionDictionary</key>
+	<dict>
+		<key>Walking</key>
+		<string>Walking directions to your stop need your precise location.</string>
+	</dict>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>B-Town Bus uses your location to find nearby stops, estimate your walk, and tell you when you're already at your stop.</string>
 	<key>NSSupportsLiveActivities</key>

@@ -184,6 +184,13 @@ struct TripView: View {
                         .font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.muted)
                 }
             }
+        } else if location.isApproximate, guide.route == nil {
+            Button { UIApplication.shared.open(URL(string: UIApplication.openSettingsURLString)!) } label: {
+                Label("Precise Location is off. Tap to turn it on for walking directions.", systemImage: "location.slash.fill")
+                    .font(.system(size: 15, weight: .heavy)).foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(14)
+                    .background(Theme.me, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+            }
         } else {
             strip(fill: Theme.soft, ink: Theme.ink) {
                 Image(systemName: "figure.walk")
