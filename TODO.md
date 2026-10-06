@@ -15,7 +15,7 @@ Docs: [LiveActivityIntent](https://developer.apple.com/documentation/appintents/
 
 ## iOS efficiency
 
-`ios/BTownBus/Services/AppStore.swift` has an uncommitted, untested start on item 1 and item 2. Keep it or revert it before doing the rest.
+Items 1 and 2 are in `AppStore.swift` on the `codex/ios-ride-mode` branch (built and run in the simulator, not measured on a phone yet).
 
 1. Only assign store data that actually changed, so every screen doesn't redraw every 15 s. Ignore arrival shifts under 30 s. Also keep a failed agency's buses on the map during an outage (bug fix).
 2. Cache the Nearby list until you've moved about 15 m.

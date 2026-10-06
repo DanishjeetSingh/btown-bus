@@ -49,7 +49,8 @@ struct MapScreen: View {
                 .annotationTitles(.hidden)
             }
             if let walking = walking.route {
-                MapPolyline(walking.polyline).stroke(.blue, style: StrokeStyle(lineWidth: 5, dash: [8, 4]))
+                MapPolyline(walking.polyline).stroke(Color.busInk, style: StrokeStyle(lineWidth: 9, lineCap: .round, lineJoin: .round))
+                MapPolyline(walking.polyline).stroke(Color.busYellow, style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round, dash: [1, 9]))
             }
             UserAnnotation()
         }
@@ -135,7 +136,7 @@ struct BusMarker: View {
     }
 }
 
-private struct Triangle: Shape {
+struct Triangle: Shape {
     func path(in rect: CGRect) -> Path {
         Path { path in
             path.move(to: CGPoint(x: rect.midX, y: rect.minY))

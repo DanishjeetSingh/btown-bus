@@ -1,34 +1,44 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { isAtStop, leavePlan, resolveTrip, vehicleStopsAway } from '../src/transit/trip.ts';
+import { isAtStop, leavePlan, resolveTrip, upcomingVisits, vehicleStopsAway } from '../src/transit/trip.ts';
 
 const loop = ['42', '43', '44', '45', '46', '47'];
 
-const count = (stops, next, target, loops = false, upcoming = []) => vehicleStopsAway(
-  { patterns: [{ id: 'p', name: 'Outbound', stopIds: stops, loops }] },
-  { patternId: 'p', nextStopId: next, nextStops: upcoming.map(stopId => ({ stopId, minutes: 1 })) }, target,
-);
+const bus = (patternId, nextStopId, { last, upcoming = [] } = {}) =>
+  ({ patternId, nextStopId, lastStopId: last, nextStops: upcoming.map((stopId) => ({ stopId, minutes: 1 })) });
+const pattern = (id, stopIds, loops = false) => ({ id, name: id, stopIds, loops });
 
-test('counts only the active direction and never wraps a non-loop route', () => {
-  assert.equal(count(loop, '44', '44'), 1);
-  assert.equal(count(loop, '43', '47'), 5);
-  assert.equal(count(loop, '46', '43'), undefined);
-  assert.equal(count(loop, '46', '43', true), 4);
-  const route = { stopIds: Array.from({ length: 25 }, (_, i) => String(i)), patterns: [
-    { id: 'out', name: 'Outbound', stopIds: Array.from({ length: 10 }, (_, i) => String(i * 2)), loops: false },
-    { id: 'in', name: 'Inbound', stopIds: ['19', '17', '15'], loops: false },
+test('counts along the bus\'s own direction and into its next trip', () => {
+  // Bloomington Transit style: one-way patterns; Outbound ends where Inbound begins.
+  const route = { stopIds: ['a', 'b', 'c', 'd', 'end', 'hub'], patterns: [
+    pattern('out', ['hub', 'a', 'b', 'end']), pattern('in', ['end', 'c', 'd', 'hub']),
   ] };
-  assert.equal(vehicleStopsAway(route, { patternId: 'out', nextStopId: '0' }, '18'), 10);
-  assert.equal(vehicleStopsAway(route, { patternId: 'in', nextStopId: '19' }, '18'), undefined);
-  assert.equal(vehicleStopsAway(route, { nextStopId: '0' }, '18'), undefined);
+  assert.equal(vehicleStopsAway(route, bus('out', 'a'), 'b'), 2);
+  assert.equal(vehicleStopsAway(route, bus('out', 'a'), 'a'), 1);
+  assert.equal(vehicleStopsAway(route, bus('out', 'b'), 'd'), 4);
+  assert.deepEqual(upcomingVisits(route, bus('out', 'b')), ['b', 'end', 'c', 'd', 'hub']);
+  assert.equal(vehicleStopsAway(route, bus('out', 'end', { upcoming: ['end', 'c', 'd'] }), 'd'), 3);
+  // The reported pattern lags a turnaround: the live stops only fit Inbound.
+  assert.equal(vehicleStopsAway(route, bus('out', 'c', { upcoming: ['c', 'd'] }), 'hub'), 3);
+  assert.equal(vehicleStopsAway(route, bus(undefined, 'a'), 'd'), undefined);
+  assert.equal(vehicleStopsAway(undefined, bus(undefined, 'a', { upcoming: ['a', 'b'] }), 'b'), 2);
 });
 
-test('uses live upcoming visits before static patterns, and rejects ambiguous visits', () => {
-  assert.equal(count(['1', '2', '3', '2', '4'], '2', '4'), undefined);
-  assert.equal(count(['1', '2', '3', '2', '4'], '2', '4', false, ['2', '4']), 2);
-  assert.equal(count(['1', '2', '3', '4'], '1', '4', false, ['1', '3']), undefined);
-  assert.equal(count(['1', '2', '3', '1'], '3', '2', true, ['3', '1']), 3);
-  assert.equal(vehicleStopsAway(undefined, { nextStops: [{ stopId: 'a' }, { stopId: 'b' }] }, 'b'), 2);
+test('when two next trips fit, only their shared stops count', () => {
+  const route = { stopIds: [], patterns: [
+    pattern('out', ['hub', 'a', 'b', 'end']), pattern('in', ['end', 'c', 'd', 'hub']), pattern('in2', ['end', 'c', 'x']),
+  ] };
+  assert.equal(vehicleStopsAway(route, bus('out', 'b'), 'c'), 3);
+  assert.equal(vehicleStopsAway(route, bus('out', 'b'), 'd'), undefined);
+  assert.equal(vehicleStopsAway(route, bus('out', 'end', { upcoming: ['end', 'c', 'd'] }), 'd'), 3);
+});
+
+test('loops that pass a stop twice use the stop the bus just left', () => {
+  const route = { stopIds: [], patterns: [pattern('loop', ['1', '2', '3', '1', '4', '5', '1'], true)] };
+  assert.equal(vehicleStopsAway(route, bus('loop', '1', { last: '3' }), '5'), 3);
+  assert.equal(vehicleStopsAway(route, bus('loop', '1', { last: '5' }), '5'), 6);
+  assert.equal(vehicleStopsAway(route, bus('loop', '1'), '5'), undefined);
+  assert.equal(vehicleStopsAway(route, bus('loop', '5'), '2'), 3);
 });
 
 test('at-stop allows for GPS accuracy but caps it', () => {

@@ -33,6 +33,7 @@ final class WalkingGuide: NSObject {
     @ObservationIgnored private var lastRequest = Date.distantPast
     @ObservationIgnored private var waitingForLocation = false
     @ObservationIgnored private var requestTask: Task<Void, Never>?
+    @ObservationIgnored private var showsLiveActivity = true
 
     override init() {
         super.init()
@@ -41,7 +42,11 @@ final class WalkingGuide: NSObject {
         Task { for activity in orphaned { await activity.end(nil, dismissalPolicy: .immediate) } }
     }
 
-    func start(to stop: TransitStop) {
+    /// Starts walking directions. `showsLiveActivity` is off during a tracked trip, whose own
+    /// Live Activity already shows the walk.
+    func start(to stop: TransitStop, showsLiveActivity: Bool = true) {
+        if destination?.id == stop.id, route != nil || loading { return }
+        self.showsLiveActivity = showsLiveActivity
         endActivity()
         activityProblem = nil
         requestTask?.cancel()
@@ -122,9 +127,11 @@ final class WalkingGuide: NSObject {
                    let saved = try? JSONDecoder().decode(WalkingRoutePreference.self, from: data),
                    let index = saved.match(in: descriptors) {
                     activate(alternatives[index])
-                } else {
-                    // Require a choice when the remembered corridor is no longer available.
+                } else if forceRouteChoice {
                     choosingRoute = true
+                } else {
+                    // Apple lists the fastest route first. "Change route" lets you pick another, and that's remembered.
+                    activate(alternatives[0])
                 }
                 updateActivity(force: true)
             } catch {
@@ -163,7 +170,7 @@ final class WalkingGuide: NSObject {
         offRouteFixes = 0
         arrived = false
         remainingDistance = selected.distance
-        if activity == nil { startActivity() }
+        if activity == nil, showsLiveActivity { startActivity() }
         locationDidUpdate()
         updateActivity(force: true)
     }

@@ -15,11 +15,11 @@
 		4E54006D9C1E33D178381EBC /* TripMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8102DF4E09833C1298E1511 /* TripMath.swift */; };
 		4FCE42B7B9247DEDE21C3174 /* EndWalkingIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8E7B816C7D2ADEAD05CEEA3 /* EndWalkingIntent.swift */; };
 		51D3DA8101BB22550E1BD328 /* RideJourney.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAA8CD159F81EC79678BAA8A /* RideJourney.swift */; };
-		57FC52AF675DEF08F04081B6 /* JourneyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3975EC547DD8ADD9DE6D372 /* JourneyView.swift */; };
 		5F23E736FDD5AB805DD7FCD3 /* LocationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BCB0D0C614547EBF501C56A /* LocationService.swift */; };
 		661B19C6DF978671D970237C /* EndWalkingIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8E7B816C7D2ADEAD05CEEA3 /* EndWalkingIntent.swift */; };
 		6AFF4C48CE24B8D80F8FFFB9 /* BTownBusApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2A0282D3417A955B033E194 /* BTownBusApp.swift */; };
 		7BE75D85FF2CCCB8C8AF88F0 /* TripLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDED350AD323158D41B30EB3 /* TripLiveActivity.swift */; };
+		7D3143B4CC7DB4C592934580 /* TripView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42715E8D0603B2BFE996742B /* TripView.swift */; };
 		7EEA8C0C6C33E0D36684ADFE /* TripBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78D7B914EC0AFA7DBBCA8F61 /* TripBanner.swift */; };
 		897B4C24CB78F5726D4D0189 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADA2CDA0AA1B7519E76CA30E /* RootView.swift */; };
 		89AC67BC2B91C3A54D7BE04E /* TransitClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202419B8074D81FD74FED023 /* TransitClient.swift */; };
@@ -33,7 +33,6 @@
 		C468F2B46B8583CA939551A1 /* TransitModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AF7514BDEAB86B9A724B4C9 /* TransitModels.swift */; };
 		C5CD47788D630EFE9A35A9FE /* WalkingActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100176B028F2DB6E8773F909 /* WalkingActivityAttributes.swift */; };
 		CB6B2D2FCCFE62693756CE30 /* StopLists.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F7B871F4E9794050894D1CE /* StopLists.swift */; };
-		CD0EF31FC9612122A700D93F /* WalkDirectionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4C43E708556842A1B7A503F /* WalkDirectionsView.swift */; };
 		D7E4977E0FADF9585DFBC7EF /* RoutePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 172A3591DA6CC653D4021442 /* RoutePickerView.swift */; };
 		DF6E813862D753ABA8BB2B09 /* EndTripIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCD5947F1A856A2806104D4A /* EndTripIntent.swift */; };
 		E94D719BE495A99187B55C00 /* TripActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC28256C7F769BDA0D1903C2 /* TripActivityAttributes.swift */; };
@@ -72,6 +71,7 @@
 		202419B8074D81FD74FED023 /* TransitClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransitClient.swift; sourceTree = "<group>"; };
 		3F7B871F4E9794050894D1CE /* StopLists.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StopLists.swift; sourceTree = "<group>"; };
 		3F98C510F2740D193376012E /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		42715E8D0603B2BFE996742B /* TripView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripView.swift; sourceTree = "<group>"; };
 		4AF7514BDEAB86B9A724B4C9 /* TransitModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransitModels.swift; sourceTree = "<group>"; };
 		4E739C72A5276FC3334C84E8 /* WalkingLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalkingLiveActivity.swift; sourceTree = "<group>"; };
 		65E206087E3356A416B338CA /* MapScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapScreen.swift; sourceTree = "<group>"; };
@@ -86,9 +86,7 @@
 		A5D1FF5FC1E1C9964E40433E /* StopDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StopDetailView.swift; sourceTree = "<group>"; };
 		ADA2CDA0AA1B7519E76CA30E /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		B290FB15346046857E10F166 /* WalkingRoutePreference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalkingRoutePreference.swift; sourceTree = "<group>"; };
-		B4C43E708556842A1B7A503F /* WalkDirectionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalkDirectionsView.swift; sourceTree = "<group>"; };
 		C2A0282D3417A955B033E194 /* BTownBusApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BTownBusApp.swift; sourceTree = "<group>"; };
-		C3975EC547DD8ADD9DE6D372 /* JourneyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JourneyView.swift; sourceTree = "<group>"; };
 		C8E7B816C7D2ADEAD05CEEA3 /* EndWalkingIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EndWalkingIntent.swift; sourceTree = "<group>"; };
 		CDED350AD323158D41B30EB3 /* TripLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripLiveActivity.swift; sourceTree = "<group>"; };
 		DAA8CD159F81EC79678BAA8A /* RideJourney.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideJourney.swift; sourceTree = "<group>"; };
@@ -103,7 +101,6 @@
 		0A0A6F3D726797BE962BFD24 /* Views */ = {
 			isa = PBXGroup;
 			children = (
-				C3975EC547DD8ADD9DE6D372 /* JourneyView.swift */,
 				65E206087E3356A416B338CA /* MapScreen.swift */,
 				ADA2CDA0AA1B7519E76CA30E /* RootView.swift */,
 				172A3591DA6CC653D4021442 /* RoutePickerView.swift */,
@@ -111,7 +108,7 @@
 				3F7B871F4E9794050894D1CE /* StopLists.swift */,
 				3F98C510F2740D193376012E /* Theme.swift */,
 				78D7B914EC0AFA7DBBCA8F61 /* TripBanner.swift */,
-				B4C43E708556842A1B7A503F /* WalkDirectionsView.swift */,
+				42715E8D0603B2BFE996742B /* TripView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -300,7 +297,6 @@
 				6AFF4C48CE24B8D80F8FFFB9 /* BTownBusApp.swift in Sources */,
 				DF6E813862D753ABA8BB2B09 /* EndTripIntent.swift in Sources */,
 				661B19C6DF978671D970237C /* EndWalkingIntent.swift in Sources */,
-				57FC52AF675DEF08F04081B6 /* JourneyView.swift in Sources */,
 				5F23E736FDD5AB805DD7FCD3 /* LocationService.swift in Sources */,
 				011C850714981746927FAFFB /* MapScreen.swift in Sources */,
 				51D3DA8101BB22550E1BD328 /* RideJourney.swift in Sources */,
@@ -315,7 +311,7 @@
 				7EEA8C0C6C33E0D36684ADFE /* TripBanner.swift in Sources */,
 				4E54006D9C1E33D178381EBC /* TripMath.swift in Sources */,
 				4A8DB1C65270896A6DDE25A7 /* TripTracker.swift in Sources */,
-				CD0EF31FC9612122A700D93F /* WalkDirectionsView.swift in Sources */,
+				7D3143B4CC7DB4C592934580 /* TripView.swift in Sources */,
 				C5CD47788D630EFE9A35A9FE /* WalkingActivityAttributes.swift in Sources */,
 				BEF3F3358A5753E7276A7A6C /* WalkingGuide.swift in Sources */,
 				3D6AC17B91DB85175AC6B939 /* WalkingProgress.swift in Sources */,

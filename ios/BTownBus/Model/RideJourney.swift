@@ -1,63 +1,71 @@
 import Foundation
 import CoreLocation
 
-/// A particular sequence of visits, including repeated stop IDs. Progress never wraps
-/// or jumps to the closest occurrence of a stop elsewhere on the route.
+/// A ride on one bus, from the stop you boarded at to the stop you're getting off at.
+///
+/// `visits` is the exact run of stops the bus serves, in order (a stop can appear twice on a loop).
+/// Progress only moves forward, one visit at a time, from the bus feed or your phone's GPS.
 struct RideJourney: Codable, Equatable {
-    var stopIds: [String]
+    /// Pickup first, destination last.
+    var visits: [String]
     var destinationName: String
-    var departedCount = 0
+    /// How many of `visits` the bus has left. Its next stop is `visits[departed]`.
+    var departed: Int
     var enteredCurrentStop = false
-    var requestedStop = false
     var atDestination = false
-    var lastFeedNextStop: String?
 
-    var destinationId: String { stopIds.last! }
-    var remainingStops: Int { atDestination ? 0 : max(1, stopIds.count - max(1, departedCount)) }
+    var destinationId: String { visits.last ?? "" }
+    var nextStopId: String? { visits.indices.contains(departed) ? visits[departed] : nil }
+    /// Stops still to come, counting your destination. 1 means your stop is next.
+    var remainingStops: Int { atDestination ? 0 : max(0, visits.count - max(departed, 1)) }
+    /// Ring the bell: you've left the stop before yours.
+    var requestStop: Bool { !atDestination && departed >= 1 && remainingStops == 1 }
 
-    static func make(route: TransitRoute, pickupIndex: Int, destinationOffset: Int, loops: Bool = false, stops: [TransitStop]) -> Self? {
-        guard route.stopIds.indices.contains(pickupIndex), destinationOffset > 0,
-              destinationOffset < route.stopIds.count, (loops || pickupIndex + destinationOffset < route.stopIds.count) else { return nil }
-        let visits = (0...destinationOffset).map { route.stopIds[(pickupIndex + $0) % route.stopIds.count] }
-        guard let destination = stops.first(where: { $0.agency == route.agency && $0.stopId == visits.last }) else { return nil }
-        return Self(stopIds: visits, destinationName: destination.name, lastFeedNextStop: visits.first)
+    /// Where you could be getting off, given the bus's upcoming stops.
+    /// If the pickup is the bus's next stop you haven't left it yet; otherwise the bus already has.
+    static func options(pickup: String, upcoming: [String], limit: Int = 40) -> (stops: [String], pickupAhead: Bool) {
+        let pickupAhead = upcoming.first == pickup
+        let stops = Array((pickupAhead ? upcoming.dropFirst() : upcoming[...]).prefix(limit))
+        return (stops, pickupAhead)
     }
 
-    mutating func update(location: CLLocation?, vehicle: TransitVehicle?, stops: [TransitStop], agency: Agency, now: Date) {
-        guard !atDestination else { return }
-        let previousDepartedCount = departedCount
-        let usable = location.flatMap { fix -> CLLocation? in
-            guard fix.horizontalAccuracy >= 0, fix.horizontalAccuracy <= 35,
-                  now.timeIntervalSince(fix.timestamp) >= 0, now.timeIntervalSince(fix.timestamp) < 20 else { return nil }
-            return fix
-        }
-        if let fix = usable {
-            if departedCount < stopIds.count - 1,
-               let current = stops.first(where: { $0.agency == agency && $0.stopId == stopIds[departedCount] }) {
-                let distance = fix.distance(from: current.location)
-                if distance <= 45 { enteredCurrentStop = true }
-                if enteredCurrentStop, distance > 85, fix.speed > 2 {
-                    departedCount += 1
-                    enteredCurrentStop = false
-                }
-            }
-            if departedCount == stopIds.count - 1,
-               let destination = stops.first(where: { $0.agency == agency && $0.stopId == destinationId }),
-               fix.distance(from: destination.location) <= 45 {
+    /// `destinationIndex` indexes into `options(pickup:upcoming:).stops`.
+    static func make(pickup: String, upcoming: [String], destinationIndex: Int, destinationName: String) -> Self? {
+        let (stops, pickupAhead) = options(pickup: pickup, upcoming: upcoming)
+        guard stops.indices.contains(destinationIndex) else { return nil }
+        return Self(visits: [pickup] + stops[...destinationIndex], destinationName: destinationName, departed: pickupAhead ? 0 : 1)
+    }
+
+    mutating func update(location: CLLocation?, busNextStop: String?, now: Date, stopLocation: (String) -> CLLocation?) {
+        guard !atDestination, !visits.isEmpty else { return }
+
+        // The feed's next stop moves us forward, but only to a nearby later visit, so a stop the
+        // route passes twice can't make the ride jump ahead.
+        if let next = busNextStop {
+            let window = departed..<min(visits.count, departed + 4)
+            if let index = window.first(where: { visits[$0] == next }), index > departed {
+                departed = index
+                enteredCurrentStop = false
+            } else if departed == visits.count - 1, next != destinationId, !window.contains(where: { visits[$0] == next }) {
+                // The bus is already heading past your stop.
                 atDestination = true
+                return
             }
         }
-        // Feed transitions can confirm departure when GPS misses a stop. Only accept
-        // the immediately following visit, and only after observing the current visit.
-        if let vehicle, now.timeIntervalSince(vehicle.updatedAt) >= 0, now.timeIntervalSince(vehicle.updatedAt) < 30, let next = vehicle.nextStopId {
-            if departedCount == previousDepartedCount, departedCount < stopIds.count - 1,
-               lastFeedNextStop == stopIds[departedCount],
-               next == stopIds[departedCount + 1], next != lastFeedNextStop {
-                departedCount += 1
+
+        // GPS: arriving at the next stop and then leaving it counts as passing it.
+        guard let fix = location, fix.horizontalAccuracy >= 0, fix.horizontalAccuracy <= 35,
+              now.timeIntervalSince(fix.timestamp) >= 0, now.timeIntervalSince(fix.timestamp) < 20 else { return }
+        if departed < visits.count - 1, let current = stopLocation(visits[departed]) {
+            let distance = fix.distance(from: current)
+            if distance <= 45 { enteredCurrentStop = true }
+            if enteredCurrentStop, distance > 85, fix.speed > 2 {
+                departed += 1
                 enteredCurrentStop = false
             }
-            lastFeedNextStop = next
         }
-        if departedCount == stopIds.count - 1 || atDestination { requestedStop = true }
+        if departed >= 1, remainingStops == 1, let destination = stopLocation(destinationId), fix.distance(from: destination) <= 45 {
+            atDestination = true
+        }
     }
 }

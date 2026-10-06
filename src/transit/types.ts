@@ -38,6 +38,8 @@ export interface TransitVehicle {
   onSchedule?: number;
   /** The stop this vehicle is heading to next. */
   nextStopId?: string;
+  /** The stop the bus most recently left; tells apart two visits to the same stop on a loop. */
+  lastStopId?: string;
   nextStops?: { stopId: string; minutes: number }[];
   updatedAt: number;
   freshness: Freshness;

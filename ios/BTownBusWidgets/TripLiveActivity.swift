@@ -109,9 +109,9 @@ struct LockScreenTripView: View {
 private func headline(_ state: TripActivityAttributes.ContentState) -> String {
     switch state.phase {
     case .boarding: return "Did you board?"
-    case .riding: return "Riding to your stop"
-    case .requestStop: return "Request your stop now"
-    case .getOff: return "Did you get off?"
+    case .riding: return state.stopsAway.map { $0 == 1 ? "Your stop is next" : "\($0) stops to go" } ?? "On the way"
+    case .requestStop: return "Ring the bell now"
+    case .getOff: return "This is your stop"
     case .atStop: return "You're at the stop"
     case .leaveNow: return "Leave now"
     case .tooLate: return "Too late to walk it"
@@ -133,7 +133,7 @@ private func hourMinute(_ date: Date) -> String {
 
 private func accent(_ phase: TripActivityAttributes.Phase) -> Color {
     switch phase {
-    case .atStop, .arriving: return .goGreen
+    case .atStop, .arriving, .getOff: return .goGreen
     case .tooLate: return .warnOrange
     case .departed, .noPrediction: return .busCream
     default: return .busYellow
@@ -212,7 +212,7 @@ struct WalkLine: View {
         HStack(spacing: 6) {
             Image(systemName: state.phase == .atStop ? "mappin.and.ellipse" : "figure.walk")
             if state.destinationName != nil {
-                Text(state.phase == .getOff ? "Confirm when you leave the bus" : "Get off at your destination")
+                Text(state.phase == .getOff ? "Get off here" : state.phase == .requestStop ? "Pull the cord for your stop" : "We'll tell you when to ring")
             } else if state.phase == .atStop {
                 Text("You're here — stay put")
             } else if let walk = state.walkSeconds {

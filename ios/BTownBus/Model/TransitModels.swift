@@ -75,6 +75,9 @@ struct TransitVehicle: Identifiable, Hashable {
     var load: Int?
     var capacity: Int?
     var patternId: String? = nil
+    /// The stop the bus most recently left. Tells apart two visits to the same stop on a loop.
+    var lastStopId: String? = nil
+    /// The feed's own list of the bus's next stops, in order. Short (1–5 stops) and can run into the bus's next trip.
     var nextStops: [String] = []
     var updatedAt: Date
 

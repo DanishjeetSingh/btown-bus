@@ -11,7 +11,7 @@ A native SwiftUI version of B-Town Bus, with a Live Activity that follows one bu
   - how many stops away it is
   - your walk time, from Apple Maps walking directions
   - when to leave
-- The Live Activity starts once the bus is within your stop count. It starts earlier if your walk means you need to leave before then. It alerts you at **Leave now** and when the bus is **arriving**, then asks whether you boarded after the bus passes your pickup stop.
+- The Live Activity starts once the bus is within your stop count. It starts earlier if your walk means you need to leave before then. It alerts you at **Leave now** and when the bus is **arriving**. Once you say you're on, it follows the ride and tells you when to ring the bell.
 - **At the stop.** When you're within about 40 m of the stop, allowing for GPS accuracy, the app and the Live Activity switch to *You're at the stop*. Walk time drops to zero and the leave countdown stops.
 
 ## How tracking works (and its limits)
@@ -47,34 +47,28 @@ In the simulator, use Features → Location to fake a position near a stop and t
 | `BTownBusWidgets` | Lock Screen and Dynamic Island UI for the Live Activity |
 | `Shared` | Live Activity attributes and the End button intent, used by both targets |
 
-## Walking guidance and ride mode
+## The trip screen
 
-Open any stop and tap **Walk to stop**, even when no buses are running. Walking is independent of bus tracking and ends when you close the walking screen. It keeps GPS active while that screen is open, including in the background. You can also access it from the tracked journey options. **Walk to stop** requests an Apple Maps walking route and shows it on the journey map and main map. The full-screen map opens at your GPS position with a close 240 m camera and 55° pitch, then follows your position and heading. Panning pauses following; Recenter restores it. Navigation cards and controls use the existing yellow/cream/ink palette, expanded typography, outlined shapes, and hard shadows. A turn card shows the upcoming maneuver and distance; the bottom panel shows remaining distance, estimated time, and arrival time. GPS is projected along the route to advance guidance. Three accurate off-route fixes trigger rerouting, with requests limited to once per 30 seconds. Controls provide route overview, recentering, a Steps sheet, and End. **Navigate in Apple Maps** opens Apple's walking navigation for spoken guidance; in-app guidance is silent.
+Tap the trip banner (or **Walk to stop** on any stop) for the full-screen trip view. It has three stages:
 
-After boarding, tap **I'm on board · Choose my stop** and confirm your destination. Destinations come from the selected bus's active direction/branch pattern, not the combined route stop list. If a pickup repeats in the pattern, choose the pickup visit. Known circular patterns support destinations across the end of the list; non-circular patterns do not wrap. Boarding needs a fresh selected vehicle with pattern data.
+- **Walking to the stop.** The map shows your walking route, you, your stop, and the bus with its route and the stops it still has to make before yours. A turn card at the top gives the next direction. The panel at the bottom is a race: one lane for your walk, one for the bus, and a line that says who gets there first ("3 min to spare", "Tight · keep moving", "The bus gets there first · hurry"). From **Walk to stop** without a tracked bus, the race is against the next bus due at that stop, with a button to track it.
+- **I'm on the bus.** Pick where you're getting off from the stops this bus will actually make next, drawn as a line diagram. If the bus has already pulled away when the app notices, it asks whether you caught it; **Missed it** switches to the next bus on the route.
+- **Riding.** The panel lists the stops left with yours marked. When yours is next, the top card turns into **Ring the bell** and you get a notification and Live Activity alert. Near your stop it says **Get off here**. Change your stop or end the trip from the ⋯ menu.
 
-Ride mode uses accurate GPS fixes less than 20 seconds old and checks the selected vehicle every 15 seconds. It advances through specific stop visits after entering and departing a stop, or after observing the corresponding next-stop transition in a fresh bus feed. It never publishes your phone's position as the bus's location. A notification, foreground haptic, and Live Activity state prompt **Request your stop now** after departing the preceding stop. Near the destination, it asks **Did you get off?**; **I got off · End trip** confirms the end manually. No accelerometer or automatic boarding/exit detection is used.
+Ride progress moves forward from the bus feed (its next stop) and from your phone's GPS (arriving at a stop, then leaving it), one stop at a time, so a stop the route passes twice can't make it skip ahead. Your phone's position is never shown as the bus.
 
-Location gaps, skipped stops, detours, and feed errors can delay reminders. Background execution and notification delivery depend on iOS permissions and scheduling. Ride reminders require on-device validation before relying on them during a journey.
+Walking directions come from Apple Maps. The fastest route is used by default; **Change walking route** in the ⋯ menu lets you pick another, and that choice is remembered for the stop. Guidance is silent; **Walk with Apple Maps** hands off to Apple's spoken directions. During a tracked trip the bus Live Activity covers the walk too; a walk without a tracked bus gets its own walking Live Activity.
 
-## Stop-count correctness
+## How stops away is counted
 
-Both clients request `get_patterns` and retain vehicle `patternID` and ordered `minutesToNextStops`. Stop counts prefer the vehicle's upcoming stop predictions, then its active pattern if the prediction prefix agrees. Repeated visits must yield an unambiguous count; only patterns explicitly marked circular wrap. Missing or conflicting data yields no stop count while the arrival ETA remains available. The combined `get_routes.stops` list is used for route membership, not counting a particular bus's remaining stops.
+ETA Spot gives each bus a pattern (one direction or branch of a route), its next stop, the stop it just left, and a short list of its next few stops. The route's own stop list mixes both directions and every branch, so it can't be used for counting. Instead the app:
 
-Run the iOS model regression checks on macOS:
+1. Finds the bus in its pattern. A stop the pattern passes twice is told apart by the stop the bus just left.
+2. Walks forward from there, wrapping around loop patterns (IU) and continuing into the pattern that starts where this one ends (Bloomington Transit buses turn around and run the other direction).
+3. Checks the result against the feed's own next stops. If the reported pattern doesn't fit (it lags behind a turnaround), it tries the route's other patterns and accepts exactly one that does.
+
+If the bus's position can't be pinned down, no count is shown rather than a wrong one; the arrival time still is. The same rules live in `src/transit/trip.ts` for the web app. Run the iOS model checks with:
 
 ```sh
 scripts/check-ios-journey.sh
 ```
-
-On an iPhone, verify walking-route refresh, a real boarding transition, notification delivery while locked, the reminder after the preceding stop, and manual exit. Also test denied permissions, feed loss, repeated pickup visits, and a circular route crossing its list boundary.
-
-## Walking Live Activity
-
-Starting navigation on a selected walking route starts its own Live Activity while the app is open. The Lock Screen shows the next maneuver, turn distance, stop name, remaining minutes/distance, and estimated arrival. Dynamic Island includes compact, minimal, and expanded walking layouts in the app's ink/cream/yellow style. GPS callbacks update navigation and the activity directly while the phone is locked. Updates are limited to every five seconds, except maneuver and phase changes. The activity becomes stale after 45 seconds without an accurate GPS fix.
-
-Arrival changes the activity to **You're here**. **End walk** on the Lock Screen/Dynamic Island ends navigation and its GPS session; ending in the app removes the activity too. Bus and walking activities are independent. If Live Activities are disabled or can't start, the walking screen explains it. Walking sessions aren't restored after process termination; orphaned activities are cleaned up on the next launch.
-
-## Remembered walking routes
-
-Walking guidance is silent. Apple Maps is asked for alternate walking routes. The first walk to a stop shows every returned path on the map with its name, time, and distance. Select a path and tap **Use this route**. The app remembers that path separately for each agency/stop and uses it automatically on later walks when it can match the freshly returned route by name and corridor. Route array order is never used as an identity. Unavailable or ambiguous preferences show the picker again. Use the walking menu's **Choose a different route** to replace the preference. Apple may return only one walking route for a particular origin/destination.

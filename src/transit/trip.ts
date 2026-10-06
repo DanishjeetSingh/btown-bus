@@ -31,25 +31,84 @@ export function isAtStop(distance: number, accuracy = 0) {
   return distance <= AT_STOP_RADIUS + Math.min(Math.max(accuracy, 0), 40);
 }
 
-/** Use the vehicle's actual direction/branch; a route stop list is not a trip itinerary. */
+/**
+ * Stops left before the bus reaches `target`, counting the target (1 = it's the bus's next stop).
+ * Undefined when the bus's position can't be pinned down; the arrival time is still shown.
+ */
 export function vehicleStopsAway(route: TransitRoute | undefined, vehicle: TransitVehicle, target: string) {
-  const upcoming = vehicle.nextStops?.map((stop) => stop.stopId) ?? [];
-  const direct = upcoming.indexOf(target);
-  if (direct >= 0) return direct + 1;
-  const pattern = route?.patterns?.find((item) => item.id === vehicle.patternId);
-  if (!pattern || !vehicle.nextStopId) return undefined;
-  const visits = [...pattern.stopIds];
-  if (pattern.loops && visits.length > 1 && visits[0] === visits.at(-1)) visits.pop();
-  const candidates: number[] = [];
-  visits.forEach((stop, index) => {
-    if (stop !== vehicle.nextStopId) return;
-    const sequence = pattern.loops ? [...visits.slice(index), ...visits.slice(0, index)] : visits.slice(index);
-    // Disagreeing live predictions mean this static pattern cannot safely supply a count.
-    if (upcoming.some((id, offset) => sequence[offset] !== id)) return;
-    const destination = sequence.indexOf(target);
-    if (destination >= 0) candidates.push(destination + 1);
-  });
-  return candidates.length && candidates.every((count) => count === candidates[0]) ? candidates[0] : undefined;
+  const visits = upcomingVisits(route, vehicle);
+  const index = visits?.indexOf(target) ?? -1;
+  if (index >= 0) return index + 1;
+  // The feed's short list can run past the end of the pattern data we have.
+  const direct = vehicle.nextStops?.findIndex((stop) => stop.stopId === target) ?? -1;
+  return direct >= 0 ? direct + 1 : undefined;
+}
+
+/**
+ * The stops this bus will visit next, in order, starting with its next stop.
+ *
+ * The route's combined stop list mixes directions and branches, so it can't be used for this. Instead:
+ * find the bus in its current pattern (a stop it passes twice is told apart by the stop it just left),
+ * walk forward, wrap around loops, and carry on into the pattern its next trip runs. Every candidate must
+ * agree with the feed's own list of next stops. Undefined if that leaves more than one answer.
+ * Same rules as `TripMath.upcomingVisits` in the iOS app.
+ */
+export function upcomingVisits(route: TransitRoute | undefined, vehicle: TransitVehicle, limit = 80): string[] | undefined {
+  const patterns = route?.patterns ?? [];
+  const current = patterns.find((pattern) => pattern.id === vehicle.patternId);
+  const onCurrent = current && visitsOn(current, patterns, vehicle, limit);
+  if (onCurrent) return onCurrent;
+  // The reported pattern can lag a turnaround. Accept exactly one other pattern that fits the live stops.
+  if ((vehicle.nextStops?.length ?? 0) < 2) return undefined;
+  const fits = patterns.filter((pattern) => pattern.id !== vehicle.patternId)
+    .map((pattern) => visitsOn(pattern, patterns, vehicle, limit)).filter((visits): visits is string[] => Boolean(visits));
+  return fits.length === 1 ? fits[0] : undefined;
+}
+
+type Pattern = NonNullable<TransitRoute['patterns']>[number];
+
+function visitsOn(pattern: Pattern, patterns: Pattern[], vehicle: TransitVehicle, limit: number) {
+  const live = vehicle.nextStops?.map((stop) => stop.stopId) ?? [];
+  const next = vehicle.nextStopId ?? live[0];
+  if (!next) return undefined;
+  const stops = [...pattern.stopIds];
+  if (pattern.loops && stops.length > 1 && stops[0] === stops.at(-1)) stops.pop();
+  if (!stops.length) return undefined;
+
+  let positions = stops.flatMap((stop, index) => stop === next ? [index] : []);
+  if (vehicle.lastStopId) {
+    const matching = positions.filter((index) => (index > 0 ? stops[index - 1] : pattern.loops ? stops.at(-1) : undefined) === vehicle.lastStopId);
+    if (matching.length) positions = matching;
+  }
+
+  const results: string[][] = [];
+  for (const index of positions) {
+    let sequence: string[];
+    if (pattern.loops) {
+      const lap = [...stops.slice(index), ...stops.slice(0, index)];
+      sequence = [...lap, ...lap];
+    } else {
+      sequence = stops.slice(index);
+      // After the last stop, the bus starts its next trip: a pattern that begins where this one ends.
+      const joins = patterns.filter((other) => other.id !== pattern.id && other.stopIds[0] === stops.at(-1))
+        .map((other) => [...sequence, ...other.stopIds.slice(1)]).filter((joined) => agrees(joined, live));
+      if (joins.length === 1) sequence = joins[0];
+      else if (joins.length > 1) {
+        // Several next trips fit; keep only the stops they share.
+        let shared = 0;
+        while (shared < joins[0].length && joins.every((joined) => joined[shared] === joins[0][shared])) shared++;
+        if (shared > sequence.length) sequence = joins[0].slice(0, shared);
+      }
+    }
+    if (agrees(sequence, live)) results.push(sequence.slice(0, limit));
+  }
+  const [first] = results;
+  return first && results.every((result) => result.join() === first.join()) ? first : undefined;
+}
+
+/** The feed's next stops must match the start of the sequence (as far as the sequence goes). */
+function agrees(sequence: string[], live: string[]) {
+  return live.every((id, offset) => offset >= sequence.length || sequence[offset] === id);
 }
 
 export type LeaveState = 'at-stop' | 'leave-now' | 'leave-soon' | 'too-late';

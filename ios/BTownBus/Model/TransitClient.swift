@@ -65,7 +65,8 @@ actor TransitClient {
                 heading: vehicle.h?.value, direction: vehicle.direction?.trimmingCharacters(in: .whitespaces),
                 nextStopId: nextStop,
                 load: vehicle.load.map { Int($0.value) }, capacity: vehicle.capacity.flatMap { $0.value > 0 ? Int($0.value) : nil },
-                patternId: vehicle.patternID?.value, nextStops: (vehicle.minutesToNextStops ?? []).map { $0.stopID.value },
+                patternId: vehicle.patternID?.value, lastStopId: vehicle.lastStopID.flatMap { $0.value == "0" ? nil : $0.value },
+                nextStops: (vehicle.minutesToNextStops ?? []).map { $0.stopID.value },
                 updatedAt: Date(timeIntervalSince1970: vehicle.receiveTime.value / 1000)
             )
         }
@@ -164,7 +165,8 @@ private struct VehiclesResponse: Decodable {
     struct Vehicle: Decodable {
         let patternID: FlexString?; let routeID: FlexString?; let equipmentID: FlexString; let lat: FlexDouble; let lng: FlexDouble
         let h: FlexDouble?; let receiveTime: FlexDouble; let inService: FlexDouble?; let direction: String?
-        let load: FlexDouble?; let capacity: FlexDouble?; let nextStopID: FlexString?; let minutesToNextStops: [NextStop]?
+        let load: FlexDouble?; let capacity: FlexDouble?; let nextStopID: FlexString?; let lastStopID: FlexString?
+        let minutesToNextStops: [NextStop]?
     }
     let get_vehicles: [Vehicle]
 }

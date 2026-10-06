@@ -49,7 +49,7 @@ struct StopDetailView: View {
         }
         .background(Theme.surface)
         .fullScreenCover(isPresented: $showWalking) {
-            WalkDirectionsView(stop: stop)
+            TripView(walkOnlyStop: stop)
         }
         .sheet(item: $trackTarget) { arrival in
             TrackSheet(stop: stop, arrival: arrival) { dismiss() }
