@@ -1,7 +1,7 @@
 import SwiftUI
 import MapKit
 
-/// The trip sheet: walking to the stop, boarding, and riding, built from the same parts as a stop's
+/// The trip sheet: getting to your stop and catching the bus, built from the same parts as a stop's
 /// page (header, walk strip, When-to-go card, arrival rows, soft buttons) with a live map card on top.
 ///
 /// Opened from the trip banner, or from a stop's "Walk to stop" (`walkOnlyStop`, no tracked bus).
@@ -13,12 +13,9 @@ struct TripView: View {
     @Environment(TripTracker.self) private var tracker
     @Environment(\.dismiss) private var dismiss
     @State private var guide = WalkingGuide.shared
-    @State private var choosingDestination = false
     @State private var showSteps = false
     @State private var trackTarget: TransitArrival?
     @State private var navigating = false
-
-    enum Stage { case walking, missed, riding }
 
     // MARK: State
 
@@ -29,18 +26,7 @@ struct TripView: View {
         return watch
     }
 
-    private var stage: Stage {
-        guard let trip else { return .walking }
-        if trip.ride != nil { return .riding }
-        return tracker.status?.phase == .boarding ? .missed : .walking
-    }
-
     private var pickup: TransitStop? { trip.flatMap { store.stop($0.stopKey) } ?? walkOnlyStop }
-
-    private var destination: TransitStop? {
-        guard let trip, let ride = trip.ride else { return nil }
-        return store.stop(TransitKey(agency: trip.agency, id: ride.destinationId))
-    }
 
     /// The bus that matters: the tracked one, or the next one due at this stop.
     private var arrival: TransitArrival? {
@@ -79,23 +65,11 @@ struct TripView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                switch stage {
-                case .walking: walking
-                case .missed: missed
-                case .riding: riding
-                }
+                walking
             }
             .padding(.horizontal, 16).padding(.top, 22).padding(.bottom, 30)
         }
         .background(Theme.surface)
-        .sheet(isPresented: $choosingDestination) {
-            DestinationPicker(routeName: routeName, routeHex: routeHex) { index in
-                if tracker.board(destinationIndex: index) { choosingDestination = false }
-            }
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
-            .presentationBackground(Theme.surface)
-        }
         .sheet(isPresented: $showSteps) {
             StepsSheet(guide: guide, stopName: pickup?.name ?? "")
                 .presentationDetents([.medium, .large])
@@ -114,9 +88,6 @@ struct TripView: View {
         .fullScreenCover(isPresented: $navigating) {
             if let pickup { WalkNavigationView(pickup: pickup, tracked: trip != nil) }
         }
-        .onChange(of: stage) { _, newStage in
-            if newStage == .riding { guide.stop() } else { startWalkingIfNeeded() }
-        }
         .onChange(of: tracker.watch == nil) { _, ended in if ended, walkOnlyStop == nil { dismiss() } }
     }
 
@@ -125,7 +96,7 @@ struct TripView: View {
     @ViewBuilder private var walking: some View {
         header(eyebrow: trip == nil ? "WALK TO \(agency.name.uppercased()) STOP" : "CATCHING THE \(routeName.uppercased()) AT",
                title: pickup?.name ?? "Your stop")
-        TripMap(stage: .walking, pickup: pickup, destination: nil, bus: bus, route: route, routeHex: routeHex,
+        TripMap(pickup: pickup, bus: bus, route: route, routeHex: routeHex,
                 walk: guide.destination?.id == pickup?.id ? guide.route : nil, stopsAhead: stopsAhead(to: pickup))
         walkStrip
         if guide.choosingRoute {
@@ -137,12 +108,7 @@ struct TripView: View {
         if let trip {
             sectionLabel("YOUR BUS")
             busRow(trip: trip)
-            if atPickup {
-                yellowButton("I'm on the bus", symbol: "bus.fill") { choosingDestination = true }
-            } else {
-                yellowButton("Start walking", symbol: "location.north.line.fill") { navigating = true }
-                softButton("I'm on the bus", symbol: "bus.fill") { choosingDestination = true }
-            }
+            if !atPickup { yellowButton("Start walking", symbol: "location.north.line.fill") { navigating = true } }
             HStack(spacing: 8) {
                 softButton("Steps", symbol: "list.bullet") { showSteps = true }.disabled(guide.steps.isEmpty)
                 softButton("Apple Maps", symbol: "map") { openInMaps() }
@@ -263,88 +229,6 @@ struct TripView: View {
         }
     }
 
-    // MARK: Missed
-
-    @ViewBuilder private var missed: some View {
-        header(eyebrow: "THE \(routeName.uppercased()) HAS LEFT", title: pickup?.name ?? "Your stop")
-        TripMap(stage: .walking, pickup: pickup, destination: nil, bus: bus, route: route, routeHex: routeHex, walk: nil, stopsAhead: [])
-        StatusCard(kicker: "DID YOU CATCH IT?", title: "On the \(routeName)?",
-                   sub: "Pick your stop and we'll tell you when to ring the bell.", fill: .busYellow, ink: .busInk)
-        yellowButton("I'm on it · pick my stop", symbol: "bus.fill") { choosingDestination = true }
-        HStack(spacing: 8) {
-            softButton("Missed it", symbol: "arrow.clockwise") { tracker.missedBus() }
-            softButton("Stop", symbol: "xmark") { tracker.stop(); dismiss() }
-        }
-        Text("Missed it follows the next \(routeName) to this stop instead.")
-            .font(.system(size: 11.5)).foregroundStyle(Theme.muted)
-    }
-
-    // MARK: Riding
-
-    @ViewBuilder private var riding: some View {
-        if let trip, let ride = trip.ride {
-            header(eyebrow: "RIDING THE \(routeName.uppercased()) TO", title: ride.destinationName)
-            TripMap(stage: .riding, pickup: nil, destination: destination, bus: bus, route: route, routeHex: routeHex,
-                    walk: nil, stopsAhead: stopsAhead(to: destination))
-            if ride.atDestination {
-                StatusCard(kicker: "THIS IS YOUR STOP", title: "Get off here", sub: ride.destinationName, fill: Theme.go, ink: Theme.goInk)
-            } else if ride.requestStop {
-                StatusCard(kicker: "YOUR STOP IS NEXT", title: "Ring the bell", sub: "Pull the cord for \(ride.destinationName).", fill: .busInk, ink: .busYellow)
-            } else {
-                StatusCard(kicker: "STOPS TO GO", title: "\(ride.remainingStops) stops",
-                           sub: "We'll tell you when to ring the bell.", fill: .busYellow, ink: .busInk)
-            }
-            if let problem = tracker.rideProblem {
-                strip(fill: Theme.soft, ink: Theme.muted) {
-                    Image(systemName: "antenna.radiowaves.left.and.right.slash")
-                    Text(problem).font(.system(size: 13.5, weight: .semibold))
-                }
-            }
-            sectionLabel("STOPS LEFT")
-            stopsLeft(ride: ride, agency: trip.agency)
-            yellowButton(ride.atDestination ? "I'm off · end trip" : "I got off", symbol: "figure.walk.departure",
-                         fill: ride.atDestination ? Theme.go : .busYellow, ink: ride.atDestination ? Theme.goInk : .busInk) { tracker.stop() }
-            HStack(spacing: 8) {
-                softButton("Change stop", symbol: "mappin.and.ellipse") { choosingDestination = true }
-                softButton("Stop", symbol: "xmark") { tracker.stop() }
-            }
-        }
-    }
-
-    /// The stops left, in an outlined card like the arrival rows, with the route's color as the line.
-    private func stopsLeft(ride: RideJourney, agency: Agency) -> some View {
-        let start = min(max(ride.departed, 1), ride.visits.count - 1)
-        let upcoming = Array(ride.visits[start...])
-        return VStack(alignment: .leading, spacing: 0) {
-            ForEach(Array(upcoming.enumerated()), id: \.offset) { index, id in
-                let last = index == upcoming.count - 1
-                HStack(spacing: 12) {
-                    ZStack {
-                        Rectangle().fill(Color(hex: routeHex)).frame(width: 5)
-                            .padding(.top, index == 0 ? 22 : 0).padding(.bottom, last ? 22 : 0)
-                        Circle().fill(last ? Color.busYellow : Theme.surface)
-                            .overlay(Circle().strokeBorder(Theme.edge, lineWidth: 2.5))
-                            .frame(width: last ? 18 : 13, height: last ? 18 : 13)
-                    }
-                    .frame(width: 22, height: 44)
-                    Text(store.stop(TransitKey(agency: agency, id: id))?.name ?? "Stop")
-                        .font(.system(size: 15, weight: last || index == 0 ? .heavy : .semibold))
-                        .foregroundStyle(last || index == 0 ? Theme.ink : Theme.muted).lineLimit(1)
-                    Spacer(minLength: 4)
-                    if last {
-                        Text("YOUR STOP").font(.system(size: 10, weight: .black)).foregroundStyle(Color.busInk)
-                            .padding(.horizontal, 8).padding(.vertical, 3).background(Color.busYellow, in: Capsule())
-                    } else if index == 0 {
-                        Text("NEXT").font(.system(size: 10, weight: .black)).tracking(0.6).foregroundStyle(Theme.muted)
-                    }
-                }
-            }
-        }
-        .padding(.horizontal, 12).padding(.vertical, 4)
-        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.edge, lineWidth: 2.5))
-    }
-
     // MARK: Parts (same look as the stop page)
 
     private func header(eyebrow: String, title: String) -> some View {
@@ -408,7 +292,7 @@ struct TripView: View {
     private func minutes(_ seconds: Int?) -> Int { max(1, Int((Double(seconds ?? 0) / 60).rounded())) }
 
     private func startWalkingIfNeeded() {
-        guard stage != .riding, let pickup, location.isAuthorized else { return }
+        guard let pickup, location.isAuthorized else { return }
         guide.start(to: pickup, showsLiveActivity: trip == nil)
     }
 
@@ -425,9 +309,7 @@ struct TripView: View {
 /// The live map, drawn exactly like the Map tab, inside an outlined card. It keeps you, the bus,
 /// and your stop in view as they move, until you pan it yourself.
 private struct TripMap: View {
-    let stage: TripView.Stage
     let pickup: TransitStop?
-    let destination: TransitStop?
     let bus: TransitVehicle?
     let route: TransitRoute?
     let routeHex: String
@@ -438,7 +320,7 @@ private struct TripMap: View {
     @State private var camera: MapCameraPosition = .region(MKCoordinateRegion(center: AppStore.downtown.coordinate, latitudinalMeters: 1500, longitudinalMeters: 1500))
     @State private var framing = true
 
-    private var target: TransitStop? { stage == .riding ? destination : pickup }
+    private var target: TransitStop? { pickup }
 
     var body: some View {
         Map(position: $camera) {
@@ -489,18 +371,17 @@ private struct TripMap: View {
                     .chunky(fill: framing ? .busYellow : Theme.surface, radius: 14, lift: 3)
             }
             .buttonStyle(PressStyle())
-            .accessibilityLabel(stage == .riding ? "Show the bus and your stop" : "Show you, the bus, and your stop")
+            .accessibilityLabel("Show you, the bus, and your stop")
             .padding(10)
         }
         .onAppear { frame(animated: false) }
         .onChange(of: bus?.updatedAt) { _, _ in if framing { frame() } }
         .onChange(of: location.location?.timestamp) { _, _ in if framing { frame() } }
         .onChange(of: walk?.distance) { _, _ in if framing { frame() } }
-        .onChange(of: stage) { _, _ in framing = true; frame() }
         .onChange(of: camera.positionedByUser) { _, moved in if moved { framing = false } }
     }
 
-    /// You, the bus, and the stop that matters (your pickup, or your destination while riding).
+    /// You, the bus, and your stop.
     private func frame(animated: Bool = true) {
         var points: [CLLocationCoordinate2D] = []
         if let me = location.location?.coordinate { points.append(me) }
@@ -514,62 +395,6 @@ private struct TripMap: View {
             span: MKCoordinateSpan(latitudeDelta: max((lats.max()! - lats.min()!) * 1.45, 0.004),
                                    longitudeDelta: max((lngs.max()! - lngs.min()!) * 1.3, 0.004)))
         if animated { withAnimation(.easeInOut(duration: 0.6)) { camera = .region(region) } } else { camera = .region(region) }
-    }
-}
-
-// MARK: - Picking your stop
-
-/// Laid out like the route picker: a big title, then outlined rows for the stops this bus makes next.
-private struct DestinationPicker: View {
-    @Environment(AppStore.self) private var store
-    @Environment(TripTracker.self) private var tracker
-    let routeName: String
-    let routeHex: String
-    let choose: (Int) -> Void
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Where are you getting off?").font(Theme.display(30)).foregroundStyle(Theme.ink)
-                Text("The stops this \(routeName) makes next, in order. We'll tell you when to ring the bell.")
-                    .font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.muted).padding(.bottom, 8)
-                if let options = tracker.boardingOptions {
-                    ForEach(Array(options.stops.enumerated()), id: \.offset) { index, stop in
-                        Button { choose(index) } label: {
-                            HStack(spacing: 12) {
-                                Text("\(index + 1)").font(Theme.display(16)).foregroundStyle(Color.readableInk(on: routeHex))
-                                    .frame(width: 38, height: 38)
-                                    .background(Color(hex: routeHex), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-                                    .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).strokeBorder(Theme.edge, lineWidth: 2))
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(stop.name).font(.system(size: 15, weight: .heavy)).multilineTextAlignment(.leading)
-                                    Text(index == 0 ? "Next stop" : "\(index + 1) stops").font(.system(size: 12.5, weight: .semibold)).foregroundStyle(Theme.muted)
-                                }
-                                Spacer(minLength: 4)
-                                if store.isFavorite(stop) { Image(systemName: "star.fill").foregroundStyle(Color.busYellow) }
-                            }
-                            .foregroundStyle(Theme.ink)
-                            .padding(8)
-                            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.edge, lineWidth: 2.5))
-                        }
-                        .buttonStyle(PressStyle())
-                    }
-                } else {
-                    VStack(spacing: 12) {
-                        ProgressView()
-                        Text(tracker.status?.vehicle == nil
-                             ? "Waiting for the bus to report where it is."
-                             : "This bus hasn't reported its position for a while, so its next stops aren't known yet.")
-                            .font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.muted).multilineTextAlignment(.center)
-                    }
-                    .frame(maxWidth: .infinity).padding(20)
-                    .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(Theme.muted, style: StrokeStyle(lineWidth: 2.5, dash: [7, 6])))
-                }
-            }
-            .padding(.horizontal, 16).padding(.top, 22).padding(.bottom, 30)
-        }
-        .background(Theme.surface)
     }
 }
 

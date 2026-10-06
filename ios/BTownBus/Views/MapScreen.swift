@@ -137,7 +137,7 @@ struct MapScreen: View {
         var points: [CLLocationCoordinate2D] = []
         if let me = location.location?.coordinate { points.append(me) }
         if let bus = trackedBus { points.append(bus.coordinate) }
-        else if let stop = store.stop(watch.ride.map { TransitKey(agency: watch.agency, id: $0.destinationId) } ?? watch.stopKey) {
+        else if let stop = store.stop(watch.stopKey) {
             points.append(stop.coordinate)
         }
         guard !points.isEmpty else { return }

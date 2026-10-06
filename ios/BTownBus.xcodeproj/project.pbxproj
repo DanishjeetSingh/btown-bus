@@ -14,7 +14,6 @@
 		4A8DB1C65270896A6DDE25A7 /* TripTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 796FD20F533DBCBDAC03755D /* TripTracker.swift */; };
 		4E54006D9C1E33D178381EBC /* TripMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8102DF4E09833C1298E1511 /* TripMath.swift */; };
 		4FCE42B7B9247DEDE21C3174 /* EndWalkingIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8E7B816C7D2ADEAD05CEEA3 /* EndWalkingIntent.swift */; };
-		51D3DA8101BB22550E1BD328 /* RideJourney.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAA8CD159F81EC79678BAA8A /* RideJourney.swift */; };
 		5829C571325245F49A9E98AE /* WalkNavigationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08C369C069682B26B250D4D9 /* WalkNavigationView.swift */; };
 		5F23E736FDD5AB805DD7FCD3 /* LocationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BCB0D0C614547EBF501C56A /* LocationService.swift */; };
 		661B19C6DF978671D970237C /* EndWalkingIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8E7B816C7D2ADEAD05CEEA3 /* EndWalkingIntent.swift */; };
@@ -91,7 +90,6 @@
 		C2A0282D3417A955B033E194 /* BTownBusApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BTownBusApp.swift; sourceTree = "<group>"; };
 		C8E7B816C7D2ADEAD05CEEA3 /* EndWalkingIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EndWalkingIntent.swift; sourceTree = "<group>"; };
 		CDED350AD323158D41B30EB3 /* TripLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripLiveActivity.swift; sourceTree = "<group>"; };
-		DAA8CD159F81EC79678BAA8A /* RideJourney.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideJourney.swift; sourceTree = "<group>"; };
 		DCD5947F1A856A2806104D4A /* EndTripIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EndTripIntent.swift; sourceTree = "<group>"; };
 		F72D095F9FA0F1AE092AF0A3 /* BTownBusWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = BTownBusWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		F8102DF4E09833C1298E1511 /* TripMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripMath.swift; sourceTree = "<group>"; };
@@ -172,7 +170,6 @@
 		D3BA56A6FD4D38FA034CB379 /* Model */ = {
 			isa = PBXGroup;
 			children = (
-				DAA8CD159F81EC79678BAA8A /* RideJourney.swift */,
 				202419B8074D81FD74FED023 /* TransitClient.swift */,
 				4AF7514BDEAB86B9A724B4C9 /* TransitModels.swift */,
 				F8102DF4E09833C1298E1511 /* TripMath.swift */,
@@ -302,7 +299,6 @@
 				661B19C6DF978671D970237C /* EndWalkingIntent.swift in Sources */,
 				5F23E736FDD5AB805DD7FCD3 /* LocationService.swift in Sources */,
 				011C850714981746927FAFFB /* MapScreen.swift in Sources */,
-				51D3DA8101BB22550E1BD328 /* RideJourney.swift in Sources */,
 				897B4C24CB78F5726D4D0189 /* RootView.swift in Sources */,
 				D7E4977E0FADF9585DFBC7EF /* RoutePickerView.swift in Sources */,
 				9AB3EB5F9D8E128398455747 /* StopDetailView.swift in Sources */,

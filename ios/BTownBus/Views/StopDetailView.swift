@@ -265,7 +265,7 @@ struct TrackSheet: View {
                     .chunky(fill: .busYellow, radius: 16)
             }
             .buttonStyle(PressStyle())
-            Text("Keeps location on in the background while tracking (you'll see the blue location pill), so the walk time stays current and it knows when you reach the stop. Confirm boarding to continue in ride mode and get a reminder for your destination.")
+            Text("Keeps location on in the background while tracking (you'll see the blue location pill), so the walk time stays current and it knows when you reach the stop. Tracking ends on its own once the bus has passed your stop.")
                 .font(.system(size: 11.5)).foregroundStyle(Theme.muted)
         }
         .padding(20)

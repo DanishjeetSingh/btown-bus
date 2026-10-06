@@ -10,7 +10,7 @@ struct TripBanner: View {
     var body: some View {
         if let watch = tracker.watch {
             let route = store.route(watch.routeKey)
-            let stop = store.stop(watch.ride.map { TransitKey(agency: watch.agency, id: $0.destinationId) } ?? watch.stopKey)
+            let stop = store.stop(watch.stopKey)
             let status = tracker.status
             let hex = route?.colorHex ?? watch.agency.colorHex
             VStack(alignment: .leading, spacing: 10) {
@@ -25,7 +25,7 @@ struct TripBanner: View {
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(kicker(watch)).lineLimit(1).minimumScaleFactor(0.7)
                                     .font(.system(size: 10, weight: .black)).tracking(0.8).foregroundStyle(Color.busCream.opacity(0.6))
-                                Text(watch.ride?.destinationName ?? stop?.name ?? "Your stop").font(.system(size: 15, weight: .heavy)).lineLimit(1)
+                                Text(stop?.name ?? "Your stop").font(.system(size: 15, weight: .heavy)).lineLimit(1)
                                 Text(line(status)).font(.system(size: 14, weight: .black)).foregroundStyle(color(status?.phase))
                             }
                             .foregroundStyle(Color.busCream)
@@ -41,7 +41,7 @@ struct TripBanner: View {
                     }
                     .accessibilityLabel("Stop tracking")
                 }
-                if watch.ride == nil, let away = status?.stopsAway {
+                if let away = status?.stopsAway {
                     HStack(spacing: 5) {
                         let total = max(watch.threshold, away, 1)
                         ForEach(0..<total, id: \.self) { index in
@@ -69,18 +69,12 @@ struct TripBanner: View {
     }
 
     private func kicker(_ watch: TripWatch) -> String {
-        if watch.ride != nil { return "RIDING TO" }
-        if tracker.status?.phase == .boarding { return "TAP IF YOU GOT ON" }
         return tracker.activityRunning ? "LIVE ACTIVITY ON" : "LIVE AT \(watch.threshold) STOPS AWAY"
     }
 
     private func line(_ status: TripStatus?) -> String {
         guard let status else { return "Checking the bus…" }
         switch status.phase {
-        case .boarding: return "Did you board?"
-        case .riding: return status.stopsAway.map { "\($0) stops to go" } ?? "On the way"
-        case .requestStop: return "Ring the bell now"
-        case .getOff: return "This is your stop"
         case .atStop: return "You're at the stop"
         case .leaveNow: return "Leave now"
         case .tooLate: return "Too late to walk it"
@@ -102,9 +96,7 @@ struct TripBanner: View {
     }
 
     @ViewBuilder private func countdown(_ status: TripStatus?) -> some View {
-        if let ride = tracker.watch?.ride {
-            Text("\(ride.remainingStops)").font(Theme.display(30)).foregroundStyle(Color.busYellow)
-        } else if let arrival = status?.arrival {
+        if let arrival = status?.arrival {
             let minutes = arrival.minutes()
             Group {
                 if minutes == 0 { Text("Now") }

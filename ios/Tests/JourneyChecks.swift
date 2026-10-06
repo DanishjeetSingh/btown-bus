@@ -6,9 +6,8 @@ import MapKit
 @main struct JourneyChecks {
     static func main() {
         stopCounting()
-        rideProgress()
         walkingMath()
-        print("iOS stop-count and ride-progress checks passed")
+        print("iOS stop-count and walking checks passed")
     }
 
     static func bus(pattern: String?, next: String?, last: String? = nil, upcoming: [String] = []) -> TransitVehicle {
@@ -57,61 +56,6 @@ import MapKit
         precondition(TripMath.stopsAway(route: campus, vehicle: bus(pattern: "loop", next: "1"), target: "5") == nil)
         // Wrapping around the loop.
         precondition(TripMath.stopsAway(route: campus, vehicle: bus(pattern: "loop", next: "5"), target: "2") == 3)
-    }
-
-    static func rideProgress() {
-        let now = Date()
-        let ids = ["0", "1", "2", "3"]
-        let places = Dictionary(uniqueKeysWithValues: ids.enumerated().map { index, id in
-            (id, CLLocation(latitude: 39, longitude: -86 + Double(index) * 0.003))
-        })
-        let at: (String) -> CLLocation? = { places[$0] }
-        func fix(_ longitude: Double, accuracy: Double = 5, age: Double = 0, speed: Double = 5) -> CLLocation {
-            CLLocation(coordinate: .init(latitude: 39, longitude: longitude), altitude: 0, horizontalAccuracy: accuracy,
-                       verticalAccuracy: 5, course: 90, speed: speed, timestamp: now.addingTimeInterval(-age))
-        }
-
-        // Boarding while the bus is still at the pickup.
-        let options = RideJourney.options(pickup: "0", upcoming: ["0", "1", "2", "3"])
-        precondition(options.pickupAhead && options.stops == ["1", "2", "3"])
-        var ride = RideJourney.make(pickup: "0", upcoming: ["0", "1", "2", "3"], destinationIndex: 1, destinationName: "Stop 2")!
-        precondition(ride.visits == ["0", "1", "2"] && ride.remainingStops == 2 && !ride.requestStop)
-        // Still at the pickup: no alert.
-        ride.update(location: fix(-86), busNextStop: "0", now: now, stopLocation: at)
-        precondition(ride.departed == 0 && !ride.requestStop)
-        // Feed says the bus left the pickup; GPS agreeing must not advance twice.
-        ride.update(location: fix(-85.9985), busNextStop: "1", now: now, stopLocation: at)
-        precondition(ride.departed == 1 && !ride.requestStop)
-        // Stale or inaccurate GPS is ignored.
-        ride.update(location: fix(-85.9955, age: 60), busNextStop: nil, now: now, stopLocation: at)
-        ride.update(location: fix(-85.9955, accuracy: 150), busNextStop: nil, now: now, stopLocation: at)
-        precondition(ride.departed == 1)
-        // GPS: reach stop 1, then leave it. Your stop is next, so ring the bell.
-        ride.update(location: fix(-85.997), busNextStop: nil, now: now, stopLocation: at)
-        ride.update(location: fix(-85.9955), busNextStop: nil, now: now, stopLocation: at)
-        precondition(ride.requestStop && ride.remainingStops == 1 && !ride.atDestination)
-        ride.update(location: fix(-85.994, speed: 0), busNextStop: nil, now: now, stopLocation: at)
-        precondition(ride.atDestination && ride.remainingStops == 0 && !ride.requestStop)
-
-        // Boarding after the bus already left the pickup: a one-stop ride asks for the bell right away.
-        let late = RideJourney.make(pickup: "0", upcoming: ["1", "2"], destinationIndex: 0, destinationName: "Stop 1")!
-        precondition(late.visits == ["0", "1"] && late.departed == 1 && late.requestStop)
-
-        // A loop that passes "0" twice: the feed can only move one nearby visit at a time.
-        var loop = RideJourney.make(pickup: "0", upcoming: ["0", "1", "0", "2"], destinationIndex: 2, destinationName: "Stop 2")!
-        precondition(loop.visits == ["0", "1", "0", "2"])
-        loop.update(location: nil, busNextStop: "1", now: now, stopLocation: at)
-        precondition(loop.departed == 1)
-        loop.update(location: nil, busNextStop: "0", now: now, stopLocation: at)
-        precondition(loop.departed == 2 && !loop.requestStop)
-        loop.update(location: nil, busNextStop: "2", now: now, stopLocation: at)
-        precondition(loop.departed == 3 && loop.requestStop)
-        // The bus heads past your stop: time to get off (or you already did).
-        loop.update(location: nil, busNextStop: "9", now: now, stopLocation: at)
-        precondition(loop.atDestination)
-
-        let data = try! JSONEncoder().encode(ride)
-        precondition(try! JSONDecoder().decode(RideJourney.self, from: data) == ride)
     }
 
     static func walkingMath() {
