@@ -1,6 +1,7 @@
 import Foundation
 import CoreLocation
 import Observation
+import WidgetKit
 
 @MainActor @Observable
 final class AppStore {
@@ -16,7 +17,10 @@ final class AppStore {
     private(set) var arrivalsLoadedFor: Set<TransitKey> = []
 
     private(set) var favorites: [TransitKey] {
-        didSet { UserDefaults.standard.set(favorites.map(\.description), forKey: "favorites") }
+        didSet {
+            UserDefaults.standard.set(favorites.map(\.description), forKey: "favorites")
+            shareSavedStops()
+        }
     }
     private(set) var activeRoutes: Set<TransitKey> {
         didSet { UserDefaults.standard.set(activeRoutes.map(\.description), forKey: "routes") }
@@ -33,6 +37,17 @@ final class AppStore {
     init() {
         favorites = (UserDefaults.standard.stringArray(forKey: "favorites") ?? []).compactMap(TransitKey.init)
         activeRoutes = Set((UserDefaults.standard.stringArray(forKey: "routes") ?? []).compactMap(TransitKey.init))
+    }
+
+    /// Hand the saved stops (with names and route colors) to the Saved Stops widget.
+    private func shareSavedStops() {
+        guard !stopByKey.isEmpty else { return }
+        let shared = favoriteStops.map { stop in
+            SavedStopsShare.Stop(agency: stop.agency.rawValue, id: stop.stopId, name: stop.name, routes: stop.routeIds.compactMap { id in
+                routeByKey[TransitKey(agency: stop.agency, id: id)].map { SavedStopsShare.Route(id: $0.routeId, shortName: $0.shortName, colorHex: $0.colorHex) }
+            })
+        }
+        if SavedStopsShare.save(shared) { WidgetCenter.shared.reloadAllTimelines() }
     }
 
     // MARK: Lookups
@@ -138,6 +153,7 @@ final class AppStore {
             if mergedStops.map(\.id) != stops.map(\.id) {
                 stops = mergedStops
                 stopByKey = Dictionary(mergedStops.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+                shareSavedStops()
                 nearbyCache = nil
             }
             let mergedVehicles = newVehicles + vehicles.filter { failed.contains($0.agency) }

@@ -40,6 +40,10 @@ targets:
           Walking: Walking directions to your stop need your precise location.
         NSLocationAlwaysAndWhenInUseUsageDescription: While you're tracking a bus, B-Town Bus keeps checking your location so the Live Activity can update your walk time and notice when you reach the stop.
         ITSAppUsesNonExemptEncryption: false
+    entitlements:
+      path: BTownBus/BTownBus.entitlements
+      properties:
+        com.apple.security.application-groups: [group.me.singhdan.btownbus]
     dependencies:
       - target: BTownBusWidgets
   BTownBusWidgets:
@@ -48,6 +52,12 @@ targets:
     sources:
       - BTownBusWidgets
       - Shared
+      - BTownBus/Model/TransitModels.swift
+      - BTownBus/Model/TransitClient.swift
+    entitlements:
+      path: BTownBusWidgets/BTownBusWidgets.entitlements
+      properties:
+        com.apple.security.application-groups: [group.me.singhdan.btownbus]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: me.singhdan.btownbus.widgets

@@ -5,6 +5,7 @@ import WidgetKit
 @main
 struct BTownBusWidgets: WidgetBundle {
     var body: some Widget {
+        SavedStopsWidget()
         TripLiveActivity()
         WalkingLiveActivity()
     }

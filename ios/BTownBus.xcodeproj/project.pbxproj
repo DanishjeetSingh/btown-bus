@@ -8,13 +8,17 @@
 
 /* Begin PBXBuildFile section */
 		011C850714981746927FAFFB /* MapScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65E206087E3356A416B338CA /* MapScreen.swift */; };
+		0F07568F6A84E0555C4A3AC7 /* SavedStopsWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBA8EDF6E59EDF930474BCDB /* SavedStopsWidget.swift */; };
+		24395CB3F6FBC389A7E94AD6 /* SavedStopsShare.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3E19F78845960795B0D7563 /* SavedStopsShare.swift */; };
 		3D6AC17B91DB85175AC6B939 /* WalkingProgress.swift in Sources */ = {isa = PBXBuildFile; fileRef = A509D083A3E61EDAB46EB140 /* WalkingProgress.swift */; };
 		40BFF13EBF4EF5EE41C5F13A /* AppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94C98608376A89DFF8E5C8E3 /* AppStore.swift */; };
 		4586B9EA12A75C4E2195CADE /* BTownBusWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F72D095F9FA0F1AE092AF0A3 /* BTownBusWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		4A8DB1C65270896A6DDE25A7 /* TripTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 796FD20F533DBCBDAC03755D /* TripTracker.swift */; };
 		4E54006D9C1E33D178381EBC /* TripMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8102DF4E09833C1298E1511 /* TripMath.swift */; };
 		4FCE42B7B9247DEDE21C3174 /* EndWalkingIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8E7B816C7D2ADEAD05CEEA3 /* EndWalkingIntent.swift */; };
+		55F8033E6B09C4EC93F1A0B2 /* TransitClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202419B8074D81FD74FED023 /* TransitClient.swift */; };
 		5829C571325245F49A9E98AE /* WalkNavigationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08C369C069682B26B250D4D9 /* WalkNavigationView.swift */; };
+		5B6BB2720E9E0A7B978E7B6C /* TransitModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AF7514BDEAB86B9A724B4C9 /* TransitModels.swift */; };
 		5F23E736FDD5AB805DD7FCD3 /* LocationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BCB0D0C614547EBF501C56A /* LocationService.swift */; };
 		661B19C6DF978671D970237C /* EndWalkingIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8E7B816C7D2ADEAD05CEEA3 /* EndWalkingIntent.swift */; };
 		6AFF4C48CE24B8D80F8FFFB9 /* BTownBusApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2A0282D3417A955B033E194 /* BTownBusApp.swift */; };
@@ -34,6 +38,7 @@
 		C5CD47788D630EFE9A35A9FE /* WalkingActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100176B028F2DB6E8773F909 /* WalkingActivityAttributes.swift */; };
 		CB6B2D2FCCFE62693756CE30 /* StopLists.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F7B871F4E9794050894D1CE /* StopLists.swift */; };
 		D7E4977E0FADF9585DFBC7EF /* RoutePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 172A3591DA6CC653D4021442 /* RoutePickerView.swift */; };
+		DEFDE477985C785A222627C6 /* SavedStopsShare.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3E19F78845960795B0D7563 /* SavedStopsShare.swift */; };
 		DF6E813862D753ABA8BB2B09 /* EndTripIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCD5947F1A856A2806104D4A /* EndTripIntent.swift */; };
 		E94D719BE495A99187B55C00 /* TripActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC28256C7F769BDA0D1903C2 /* TripActivityAttributes.swift */; };
 		F02E0C431A0DA264EF9495CF /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A4004F92B558A04D5F04A10E /* Assets.xcassets */; };
@@ -80,6 +85,7 @@
 		769D58977B9A176B8FD095EE /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		78D7B914EC0AFA7DBBCA8F61 /* TripBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripBanner.swift; sourceTree = "<group>"; };
 		796FD20F533DBCBDAC03755D /* TripTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripTracker.swift; sourceTree = "<group>"; };
+		8203351093AFFF8AB9A1B61A /* BTownBus.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BTownBus.entitlements; sourceTree = "<group>"; };
 		90DD7B63E24B2EDEE5A163D9 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		94C98608376A89DFF8E5C8E3 /* AppStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStore.swift; sourceTree = "<group>"; };
 		A4004F92B558A04D5F04A10E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -90,7 +96,10 @@
 		C2A0282D3417A955B033E194 /* BTownBusApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BTownBusApp.swift; sourceTree = "<group>"; };
 		C8E7B816C7D2ADEAD05CEEA3 /* EndWalkingIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EndWalkingIntent.swift; sourceTree = "<group>"; };
 		CDED350AD323158D41B30EB3 /* TripLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripLiveActivity.swift; sourceTree = "<group>"; };
+		CE552A54CEAA3881F9554023 /* BTownBusWidgets.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BTownBusWidgets.entitlements; sourceTree = "<group>"; };
 		DCD5947F1A856A2806104D4A /* EndTripIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EndTripIntent.swift; sourceTree = "<group>"; };
+		EBA8EDF6E59EDF930474BCDB /* SavedStopsWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedStopsWidget.swift; sourceTree = "<group>"; };
+		F3E19F78845960795B0D7563 /* SavedStopsShare.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedStopsShare.swift; sourceTree = "<group>"; };
 		F72D095F9FA0F1AE092AF0A3 /* BTownBusWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = BTownBusWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		F8102DF4E09833C1298E1511 /* TripMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripMath.swift; sourceTree = "<group>"; };
 		FC28256C7F769BDA0D1903C2 /* TripActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripActivityAttributes.swift; sourceTree = "<group>"; };
@@ -126,6 +135,7 @@
 			isa = PBXGroup;
 			children = (
 				A4004F92B558A04D5F04A10E /* Assets.xcassets */,
+				8203351093AFFF8AB9A1B61A /* BTownBus.entitlements */,
 				90DD7B63E24B2EDEE5A163D9 /* Info.plist */,
 				2885746A651F37A8C4289C69 /* App */,
 				D3BA56A6FD4D38FA034CB379 /* Model */,
@@ -140,6 +150,7 @@
 			children = (
 				DCD5947F1A856A2806104D4A /* EndTripIntent.swift */,
 				C8E7B816C7D2ADEAD05CEEA3 /* EndWalkingIntent.swift */,
+				F3E19F78845960795B0D7563 /* SavedStopsShare.swift */,
 				FC28256C7F769BDA0D1903C2 /* TripActivityAttributes.swift */,
 				100176B028F2DB6E8773F909 /* WalkingActivityAttributes.swift */,
 			);
@@ -191,7 +202,9 @@
 		EE3AF6C8D0E989A0AF65BD47 /* BTownBusWidgets */ = {
 			isa = PBXGroup;
 			children = (
+				CE552A54CEAA3881F9554023 /* BTownBusWidgets.entitlements */,
 				769D58977B9A176B8FD095EE /* Info.plist */,
+				EBA8EDF6E59EDF930474BCDB /* SavedStopsWidget.swift */,
 				CDED350AD323158D41B30EB3 /* TripLiveActivity.swift */,
 				4E739C72A5276FC3334C84E8 /* WalkingLiveActivity.swift */,
 			);
@@ -301,6 +314,7 @@
 				011C850714981746927FAFFB /* MapScreen.swift in Sources */,
 				897B4C24CB78F5726D4D0189 /* RootView.swift in Sources */,
 				D7E4977E0FADF9585DFBC7EF /* RoutePickerView.swift in Sources */,
+				24395CB3F6FBC389A7E94AD6 /* SavedStopsShare.swift in Sources */,
 				9AB3EB5F9D8E128398455747 /* StopDetailView.swift in Sources */,
 				CB6B2D2FCCFE62693756CE30 /* StopLists.swift in Sources */,
 				FDE468B25FD4CBF1A45823F8 /* Theme.swift in Sources */,
@@ -325,6 +339,10 @@
 			files = (
 				8BC1212C8366DE333A260C4E /* EndTripIntent.swift in Sources */,
 				4FCE42B7B9247DEDE21C3174 /* EndWalkingIntent.swift in Sources */,
+				DEFDE477985C785A222627C6 /* SavedStopsShare.swift in Sources */,
+				0F07568F6A84E0555C4A3AC7 /* SavedStopsWidget.swift in Sources */,
+				55F8033E6B09C4EC93F1A0B2 /* TransitClient.swift in Sources */,
+				5B6BB2720E9E0A7B978E7B6C /* TransitModels.swift in Sources */,
 				8B776821D796D4AFFF851104 /* TripActivityAttributes.swift in Sources */,
 				7BE75D85FF2CCCB8C8AF88F0 /* TripLiveActivity.swift in Sources */,
 				95783D8D6E06E9BCA0D0879F /* WalkingActivityAttributes.swift in Sources */,
@@ -348,6 +366,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = BTownBus/BTownBus.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = BTownBus/Info.plist;
@@ -434,6 +453,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = BTownBus/BTownBus.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = BTownBus/Info.plist;
@@ -450,6 +470,7 @@
 		3856986B8531B375CBA41C71 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = BTownBusWidgets/BTownBusWidgets.entitlements;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = BTownBusWidgets/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -527,6 +548,7 @@
 		CB65624596DDB3BA0E28D3B8 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = BTownBusWidgets/BTownBusWidgets.entitlements;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = BTownBusWidgets/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
