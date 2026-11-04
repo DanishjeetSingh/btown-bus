@@ -2,6 +2,7 @@ import Foundation
 import CoreLocation
 import MapKit
 import Observation
+import WidgetKit
 
 /// One location manager for the whole app. iOS remembers the permission, so
 /// unlike the home-screen web app it's only ever asked once.
@@ -60,6 +61,13 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
     func requestPermission() {
         if authorization == .notDetermined { manager.requestWhenInUseAuthorization() }
         else { startUpdates() }
+    }
+
+    /// Tracking started from the widget runs with the app in the background, where iOS only lets
+    /// location start with Always access. Asking from While Using shows a one-time upgrade prompt.
+    func requestAlwaysForWidgetTracking() {
+        guard authorization == .authorizedWhenInUse else { return }
+        manager.requestAlwaysAuthorization()
     }
 
     func startUpdates() {
@@ -137,6 +145,18 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
         }
     }
 
+    /// Hand the widget a recent position for sorting saved stops. A new spot 150 m away
+    /// can reorder them, so the widget is reloaded then; otherwise the position just waits for its next refresh.
+    private func shareWithWidget(_ fix: CLLocation) {
+        guard fix.horizontalAccuracy < 500 else { return }
+        let previous = SavedStopsShare.lastLocation
+        if let previous, previous.distance(from: fix) < 25, fix.timestamp.timeIntervalSince(previous.timestamp) < 300 { return }
+        SavedStopsShare.lastLocation = fix
+        if previous.map({ $0.distance(from: fix) > 150 }) ?? true {
+            WidgetCenter.shared.reloadTimelines(ofKind: SavedStopsShare.widgetKind)
+        }
+    }
+
     // MARK: CLLocationManagerDelegate
 
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
@@ -159,6 +179,7 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
             if latest.horizontalAccuracy >= 200, let current = location, current.horizontalAccuracy < 200,
                latest.timestamp.timeIntervalSince(current.timestamp) < 60 { return }
             location = latest
+            shareWithWidget(latest)
             // Update navigation and its Live Activity directly, including while locked.
             WalkingGuide.shared.locationDidUpdate()
         }

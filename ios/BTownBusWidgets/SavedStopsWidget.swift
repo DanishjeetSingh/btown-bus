@@ -1,15 +1,18 @@
 import SwiftUI
 import WidgetKit
+import CoreLocation
+import AppIntents
 
-/// Home Screen widget: the next buses at each saved stop.
+/// Home Screen widget: one row per saved stop (or saved bus), closest stop first.
+/// Tap a row to track that bus with a Live Activity, without opening the app.
 struct SavedStopsWidget: Widget {
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "SavedStops", provider: SavedStopsProvider()) { entry in
+        StaticConfiguration(kind: SavedStopsShare.widgetKind, provider: SavedStopsProvider()) { entry in
             SavedStopsView(entry: entry)
                 .containerBackground(for: .widget) { WidgetTheme.bg }
         }
         .configurationDisplayName("Saved Stops")
-        .description("The next buses at your saved stops.")
+        .description("Your next bus at each saved stop, closest first. Tap one to track it.")
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
     }
 }
@@ -18,27 +21,34 @@ struct SavedStopsWidget: Widget {
 
 struct SavedStopsEntry: TimelineEntry {
     struct Bus: Hashable {
+        var agency: String
+        var stopId: String
+        var routeId: String
         var route: String
         var colorHex: String
         var arrival: Date
     }
-    struct Stop: Hashable {
+
+    /// A saved stop, or one saved bus at a stop.
+    struct Row: Hashable {
         var name: String
+        /// The saved bus, shown even when none is due. Nil for a stop saved with every bus.
+        var route: SavedStopsShare.Route?
+        /// Upcoming buses for this row, soonest first. The view skips ones that have left.
         var buses: [Bus]
     }
 
     let date: Date
-    let stops: [Stop]
-    /// Nil when there are no saved stops yet; empty buses means nothing is due.
+    let rows: [Row]
+    let fetchedAt: Date
     let failed: Bool
+    var tracking: String? = nil
 
-    static let placeholder = SavedStopsEntry(date: .now, stops: [
-        Stop(name: "7th & Woodlawn (IMU)", buses: [
-            Bus(route: "E", colorHex: "#0000a0", arrival: .now.addingTimeInterval(240)),
-            Bus(route: "F", colorHex: "#8a2983", arrival: .now.addingTimeInterval(660)),
-        ]),
-        Stop(name: "Sample Gates", buses: [Bus(route: "6", colorHex: "#9e6b3f", arrival: .now.addingTimeInterval(420))]),
-    ], failed: false)
+    static let placeholder = SavedStopsEntry(date: .now, rows: [
+        Row(name: "Sample Gates", buses: [Bus(agency: "iu", stopId: "", routeId: "", route: "E", colorHex: "#0000a0", arrival: .now.addingTimeInterval(240))]),
+        Row(name: "7th & Woodlawn (IMU)", buses: [Bus(agency: "bt", stopId: "", routeId: "", route: "6", colorHex: "#9e6b3f", arrival: .now.addingTimeInterval(540))]),
+        Row(name: "Wells Library", buses: [Bus(agency: "iu", stopId: "", routeId: "", route: "X", colorHex: "#8a2983", arrival: .now.addingTimeInterval(780))]),
+    ], fetchedAt: .now, failed: false)
 }
 
 struct SavedStopsProvider: TimelineProvider {
@@ -53,33 +63,55 @@ struct SavedStopsProvider: TimelineProvider {
         Task {
             let now = Date()
             let entry = await fetch(now: now)
-            // One entry per minute so the minutes count down between network refreshes.
-            let entries = (0..<15).map { minute in
-                SavedStopsEntry(date: now.addingTimeInterval(Double(minute) * 60), stops: entry.stops, failed: entry.failed)
+            // One entry per minute so the minutes count down between refreshes. iOS rations refreshes
+            // (a few an hour at best), so the entries run past the requested refresh in case it comes late.
+            let entries = (0..<20).map { minute in
+                SavedStopsEntry(date: now.addingTimeInterval(Double(minute) * 60), rows: entry.rows,
+                                fetchedAt: entry.fetchedAt, failed: entry.failed, tracking: entry.tracking)
             }
-            completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(10 * 60))))
+            completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(5 * 60))))
         }
     }
 
+    /// Your position: the widget's own fix if iOS gives it one, or the app's last one, whichever is newer.
+    private func currentLocation() -> CLLocation? {
+        let own = CLLocationManager().location
+        let shared = SavedStopsShare.lastLocation
+        guard let own else { return shared }
+        guard let shared else { return own }
+        return own.timestamp > shared.timestamp ? own : shared
+    }
+
     private func fetch(now: Date) async -> SavedStopsEntry {
-        let saved = SavedStopsShare.load()
-        guard !saved.isEmpty else { return SavedStopsEntry(date: now, stops: [], failed: false) }
-        let keys = saved.compactMap { stop in Agency(rawValue: stop.agency).map { TransitKey(agency: $0, id: stop.id) } }
-        guard let arrivals = try? await TransitClient.shared.arrivals(for: keys) else {
-            return SavedStopsEntry(date: now, stops: saved.map { .init(name: $0.name, buses: []) }, failed: true)
+        var saved = SavedStopsShare.load()
+        let tracking = SavedStopsShare.tracking
+        guard !saved.isEmpty else { return SavedStopsEntry(date: now, rows: [], fetchedAt: now, failed: false, tracking: tracking) }
+        if let here = currentLocation() {
+            saved.sort { here.distance(from: CLLocation(latitude: $0.latitude, longitude: $0.longitude))
+                < here.distance(from: CLLocation(latitude: $1.latitude, longitude: $1.longitude)) }
         }
-        let stops = saved.map { stop -> SavedStopsEntry.Stop in
-            let colors = Dictionary(stop.routes.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-            let buses = arrivals
-                .filter { $0.agency.rawValue == stop.agency && $0.stopId == stop.id }
+        let keys = saved.flatMap { stop in stop.stops.compactMap { member in Agency(rawValue: member.agency).map { TransitKey(agency: $0, id: member.id) } } }
+        let arrivals = try? await TransitClient.shared.arrivals(for: Array(Set(keys)))
+
+        let rows = saved.flatMap { stop -> [SavedStopsEntry.Row] in
+            let members = Set(stop.stops.map { "\($0.agency):\($0.id)" })
+            let routes = Dictionary(stop.routes.map { ("\($0.agency):\($0.id)", $0) }, uniquingKeysWith: { a, _ in a })
+            let buses = (arrivals ?? [])
+                .filter { members.contains("\($0.agency.rawValue):\($0.stopId)") }
                 .map { arrival in
-                    SavedStopsEntry.Bus(route: colors[arrival.routeId]?.shortName ?? arrival.routeId,
-                                        colorHex: colors[arrival.routeId]?.colorHex ?? arrival.agency.colorHex,
-                                        arrival: arrival.predictedArrival)
+                    let route = routes["\(arrival.agency.rawValue):\(arrival.routeId)"]
+                    return SavedStopsEntry.Bus(agency: arrival.agency.rawValue, stopId: arrival.stopId, routeId: arrival.routeId,
+                                               route: route?.shortName ?? arrival.routeId, colorHex: route?.colorHex ?? arrival.agency.colorHex,
+                                               arrival: arrival.predictedArrival)
                 }
-            return .init(name: stop.name, buses: buses)
+            guard !stop.only.isEmpty else { return [.init(name: stop.name, buses: buses)] }
+            // One row per saved bus, soonest first.
+            return stop.only.map { key in
+                SavedStopsEntry.Row(name: stop.name, route: routes[key], buses: buses.filter { "\($0.agency):\($0.routeId)" == key })
+            }
+            .sorted { ($0.buses.first?.arrival ?? .distantFuture) < ($1.buses.first?.arrival ?? .distantFuture) }
         }
-        return SavedStopsEntry(date: now, stops: stops, failed: false)
+        return SavedStopsEntry(date: now, rows: rows, fetchedAt: now, failed: arrivals == nil, tracking: tracking)
     }
 }
 
@@ -101,28 +133,32 @@ struct SavedStopsView: View {
     @Environment(\.widgetFamily) private var family
     let entry: SavedStopsEntry
 
-    private var stopLimit: Int {
+    private var rowLimit: Int {
         switch family {
-        case .systemSmall: return 1
-        case .systemMedium: return 2
-        default: return 5
+        case .systemSmall: return 2
+        case .systemMedium: return 3
+        default: return 7
         }
     }
-    private let busLimit = 3
+    private var small: Bool { family == .systemSmall }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: family == .systemSmall ? 6 : 10) {
+        VStack(alignment: .leading, spacing: small ? 8 : 6) {
             header
-            if entry.stops.isEmpty {
+            if entry.rows.isEmpty {
                 Spacer(minLength: 0)
-                Text("Star stops in B-Town Bus to see them here.")
+                Text("Save stops or buses in B-Town Bus to see them here.")
                     .font(.system(size: 13, weight: .bold)).foregroundStyle(WidgetTheme.muted)
                 Spacer(minLength: 0)
             } else {
-                ForEach(Array(entry.stops.prefix(stopLimit).enumerated()), id: \.offset) { _, stop in
-                    stopRow(stop)
+                ForEach(Array(entry.rows.prefix(rowLimit).enumerated()), id: \.offset) { _, row in
+                    rowView(row)
                 }
                 Spacer(minLength: 0)
+                if family == .systemLarge {
+                    Text("Closest stop first · Tap a bus to track it")
+                        .font(.system(size: 11, weight: .semibold)).foregroundStyle(WidgetTheme.muted)
+                }
             }
         }
     }
@@ -131,60 +167,95 @@ struct SavedStopsView: View {
         HStack(spacing: 6) {
             Text("B").font(.system(size: 11, weight: .black).width(.expanded)).foregroundStyle(Color.busYellow)
                 .frame(width: 18, height: 18).background(Color.busInk, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
-            Text("SAVED STOPS").font(.system(size: 10, weight: .black)).tracking(0.8).foregroundStyle(WidgetTheme.muted)
+            if !small {
+                Text("SAVED").font(.system(size: 10, weight: .black)).tracking(0.8).foregroundStyle(WidgetTheme.muted)
+            }
             Spacer(minLength: 0)
             if entry.failed {
                 Image(systemName: "wifi.slash").font(.system(size: 10, weight: .bold)).foregroundStyle(WidgetTheme.muted)
             }
+            Text(entry.fetchedAt, style: .time)
+                .font(.system(size: 10, weight: .bold)).foregroundStyle(WidgetTheme.muted)
+            Button(intent: RefreshSavedStopsIntent()) {
+                Image(systemName: "arrow.clockwise").font(.system(size: 11, weight: .black)).foregroundStyle(WidgetTheme.ink)
+                    .frame(width: 24, height: 24)
+                    .background(WidgetTheme.surface, in: Circle())
+                    .overlay(Circle().strokeBorder(WidgetTheme.edge, lineWidth: 1.5))
+            }
+            .buttonStyle(.plain)
         }
     }
 
-    @ViewBuilder private func stopRow(_ stop: SavedStopsEntry.Stop) -> some View {
-        let upcoming = stop.buses.filter { $0.arrival > entry.date.addingTimeInterval(-30) }.prefix(busLimit)
-        VStack(alignment: .leading, spacing: 5) {
-            Text(stop.name)
-                .font(.system(size: family == .systemSmall ? 14 : 15, weight: .heavy).width(.expanded))
-                .foregroundStyle(WidgetTheme.ink).lineLimit(family == .systemSmall ? 2 : 1).minimumScaleFactor(0.8)
-            if upcoming.isEmpty {
-                Text(entry.failed ? "Couldn't load times" : "No buses due soon")
-                    .font(.system(size: 12, weight: .semibold)).foregroundStyle(WidgetTheme.muted)
-            } else if family == .systemSmall {
+    /// {stop}   [bus | time]
+    @ViewBuilder private func rowView(_ row: SavedStopsEntry.Row) -> some View {
+        let next = row.buses.first { $0.arrival > entry.date.addingTimeInterval(-30) }
+        let tracked = next.map { "\($0.agency):\($0.stopId):\($0.routeId)" == entry.tracking } ?? false
+        let name = Text(row.name)
+            .font(.system(size: small ? 13 : 15, weight: .heavy))
+            .foregroundStyle(tracked ? Color.busInk : WidgetTheme.ink)
+            .lineLimit(1).minimumScaleFactor(0.75)
+        let content = Group {
+            if small {
                 VStack(alignment: .leading, spacing: 4) {
-                    ForEach(Array(upcoming.enumerated()), id: \.offset) { index, bus in chip(bus, big: index == 0) }
+                    name
+                    chip(next: next, route: row.route, tracked: tracked)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                HStack(spacing: 6) {
-                    ForEach(Array(upcoming.enumerated()), id: \.offset) { index, bus in chip(bus, big: index == 0) }
+                HStack(spacing: 10) {
+                    name
+                    Spacer(minLength: 4)
+                    chip(next: next, route: row.route, tracked: tracked)
                 }
             }
         }
+        .padding(.horizontal, tracked ? 6 : 0).padding(.vertical, tracked ? 3 : 0)
+        .background(tracked ? Color.busYellow : .clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+        if let next {
+            Button(intent: TrackBusIntent(agency: next.agency, stopId: next.stopId, routeId: next.routeId)) { content }
+                .buttonStyle(.plain)
+        } else {
+            content
+        }
     }
 
-    /// Same look as the app's time chips: route color block, then the wait.
-    private func chip(_ bus: SavedStopsEntry.Bus, big: Bool) -> some View {
-        let minutes = max(0, Int((bus.arrival.timeIntervalSince(entry.date) / 60).rounded(.up)))
+    /// The app's time chip: route color block, a divider, then the wait.
+    private func chip(next: SavedStopsEntry.Bus?, route: SavedStopsShare.Route?, tracked: Bool) -> some View {
+        let label = next?.route ?? route?.shortName
+        let hex = next?.colorHex ?? route?.colorHex ?? "#6b6356"
         return HStack(spacing: 0) {
-            Text(bus.route)
-                .font(.system(size: big ? 13 : 11.5, weight: .black).width(.expanded))
-                .foregroundStyle(Color.readableInk(on: bus.colorHex))
-                .lineLimit(1).fixedSize()
-                .padding(.horizontal, 6)
-                .frame(minWidth: big ? 30 : 26, maxHeight: .infinity)
-                .background(Color(hex: bus.colorHex))
-            Rectangle().fill(WidgetTheme.edge).frame(width: 1.5)
+            if let label {
+                Text(label)
+                    .font(.system(size: 13, weight: .black).width(.expanded))
+                    .foregroundStyle(Color.readableInk(on: hex))
+                    .lineLimit(1).fixedSize()
+                    .padding(.horizontal, 7)
+                    .frame(minWidth: 30, maxHeight: .infinity)
+                    .background(Color(hex: hex))
+                Rectangle().fill(WidgetTheme.edge).frame(width: 1.5)
+            }
+            wait(next).lineLimit(1).fixedSize().padding(.horizontal, 8)
+        }
+        .frame(height: 28)
+        .background(WidgetTheme.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(WidgetTheme.edge, lineWidth: tracked ? 2 : 1.5))
+    }
+
+    @ViewBuilder private func wait(_ bus: SavedStopsEntry.Bus?) -> some View {
+        if let bus {
+            let minutes = max(0, Int((bus.arrival.timeIntervalSince(entry.date) / 60).rounded(.up)))
             Group {
                 if minutes == 0 { Text("Now") }
                 else if minutes >= 60 { Text(bus.arrival, style: .time) }
-                else { Text("\(minutes)") + Text("m").font(.system(size: 10, weight: .bold)).foregroundColor(WidgetTheme.muted) }
+                else { Text("\(minutes)") + Text(" min").font(.system(size: 11, weight: .bold)).foregroundColor(WidgetTheme.muted) }
             }
-            .font(.system(size: big ? 15 : 13, weight: .black)).monospacedDigit()
+            .font(.system(size: 16, weight: .black)).monospacedDigit()
             .foregroundStyle(WidgetTheme.ink)
-            .lineLimit(1).fixedSize()
-            .padding(.horizontal, 6)
+        } else {
+            Text(entry.failed ? "No data" : "None soon")
+                .font(.system(size: 12, weight: .bold)).foregroundStyle(WidgetTheme.muted)
         }
-        .frame(height: big ? 28 : 24)
-        .background(WidgetTheme.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(WidgetTheme.edge, lineWidth: 1.5))
     }
 }

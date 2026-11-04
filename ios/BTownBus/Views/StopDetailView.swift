@@ -10,7 +10,7 @@ struct StopDetailView: View {
     @State private var trackTarget: TransitArrival?
 
     var body: some View {
-        let arrivals = store.arrivals(at: stop.id)
+        let arrivals = store.arrivals(atPlace: stop)
         let here = location.isAtStop(stop)
         let walk = location.walkSeconds(to: stop)
         ScrollView {
@@ -26,13 +26,14 @@ struct StopDetailView: View {
                     }
                     .buttonStyle(PressStyle())
                 }
+                SavedBusesCard(stop: stop)
                 walkStrip(here: here, walk: walk)
                 if let first = arrivals.first, let plan = TripMath.leavePlan(busArrival: first.predictedArrival, walkSeconds: walk, atStop: here) {
                     LeaveCard(arrival: first, route: store.route(first.routeKey), plan: plan)
                 }
                 Text("ARRIVING").font(.system(size: 12, weight: .black)).tracking(1).foregroundStyle(Theme.muted).padding(.top, 4)
                 if arrivals.isEmpty {
-                    Text(store.arrivalsLoadedFor.contains(stop.id) ? "No buses predicted for this stop right now." : "Checking arrival times…")
+                    Text(store.loadedArrivals(atPlace: stop) ? "No buses predicted for this stop right now." : "Checking arrival times…")
                         .font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.muted)
                         .frame(maxWidth: .infinity).padding(20)
                         .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(Theme.muted, style: StrokeStyle(lineWidth: 2.5, dash: [7, 6])))
@@ -64,20 +65,15 @@ struct StopDetailView: View {
     private var header: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 8) {
+                let members = store.members(of: stop)
                 HStack(spacing: 6) {
-                    RoundedRectangle(cornerRadius: 3).fill(Color(hex: stop.agency.colorHex)).frame(width: 9, height: 9)
-                    Text("\(stop.agency.name.uppercased()) STOP").font(.system(size: 11.5, weight: .black)).tracking(0.8)
+                    AgencyMarks(agencies: members.map(\.agency))
+                    Text(members.count > 1 ? "IU + BLOOMINGTON TRANSIT STOP" : "\(stop.agency.name.uppercased()) STOP").font(.system(size: 11.5, weight: .black)).tracking(0.8)
                 }
                 .foregroundStyle(Theme.muted)
-                Text(stop.name).font(Theme.display(30)).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
-                FlowRow(spacing: 6) {
-                    ForEach(stop.routeIds.compactMap { store.route(TransitKey(agency: stop.agency, id: $0)) }) { route in
-                        Text(route.shortName).font(Theme.display(13))
-                            .foregroundStyle(Color.readableInk(on: route.colorHex))
-                            .padding(.horizontal, 9).padding(.vertical, 3)
-                            .background(Color(hex: route.colorHex), in: RoundedRectangle(cornerRadius: 8))
-                            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.edge, lineWidth: 2))
-                    }
+                Text(store.placeName(stop)).font(Theme.display(30)).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
+                if members.count > 1, let other = members.first(where: { $0.name != store.placeName(stop) }) {
+                    Text("Same stop as \(other.name)").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.muted)
                 }
             }
             Spacer()
@@ -128,6 +124,52 @@ struct FavoriteToggle: View {
         }
         .buttonStyle(PressStyle())
         .sensoryFeedback(.impact, trigger: on)
+    }
+}
+
+/// The stop's buses as toggles: save just the ones you ride here, or leave them all.
+struct SavedBusesCard: View {
+    @Environment(AppStore.self) private var store
+    let stop: TransitStop
+
+    var body: some View {
+        let entry = store.savedEntry(for: stop)
+        let picked = Set(entry?.routes ?? [])
+        let routes = store.routes(at: stop)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("BUSES HERE").font(.system(size: 11.5, weight: .black)).tracking(1).foregroundStyle(Theme.muted)
+                Spacer()
+                if !picked.isEmpty {
+                    Text("\(picked.count) SAVED").font(.system(size: 11, weight: .black)).tracking(0.6).foregroundStyle(Color.busInk)
+                        .padding(.horizontal, 8).padding(.vertical, 3).background(Color.busYellow, in: Capsule())
+                }
+            }
+            FlowRow(spacing: 7) {
+                ForEach(routes) { route in
+                    let on = picked.contains(route.id)
+                    let dim = !picked.isEmpty && !on
+                    Button { withAnimation(.spring(duration: 0.25)) { store.toggleSavedRoute(route.id, at: stop) } } label: {
+                        HStack(spacing: 4) {
+                            if on { Image(systemName: "star.fill").font(.system(size: 10, weight: .black)) }
+                            Text(route.shortName).font(Theme.display(15))
+                        }
+                        .foregroundStyle(dim ? Theme.muted : Color.readableInk(on: route.colorHex))
+                        .padding(.horizontal, 11).frame(minWidth: 44).frame(height: 36)
+                        .background(dim ? Theme.soft : Color(hex: route.colorHex), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).strokeBorder(dim ? Theme.muted : Theme.edge, lineWidth: 2))
+                    }
+                    .buttonStyle(PressStyle())
+                    .sensoryFeedback(.selection, trigger: on)
+                }
+            }
+            Text(entry == nil ? "Tap a bus to save just that one at this stop."
+                 : picked.isEmpty ? "Saved with every bus. Tap the ones you ride to show only those."
+                 : "Only these show on your Saved tab and widget. Tap to change.")
+                .font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.muted)
+        }
+        .padding(14)
+        .background(Theme.soft, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }
 
@@ -230,7 +272,7 @@ struct TrackSheet: View {
                 RouteTag(name: route?.shortName ?? arrival.routeId, hex: route?.colorHex ?? arrival.agency.colorHex, size: 54)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Track to").font(.system(size: 12, weight: .black)).tracking(0.8).foregroundStyle(Theme.muted)
-                    Text(stop.name).font(Theme.display(20)).foregroundStyle(Theme.ink).lineLimit(2)
+                    Text(store.placeName(stop)).font(Theme.display(20)).foregroundStyle(Theme.ink).lineLimit(2)
                 }
             }
             if arrival.vehicleId != nil {
@@ -255,6 +297,7 @@ struct TrackSheet: View {
             .padding(14).background(Theme.soft, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
 
             Button {
+                LocationService.shared.requestAlwaysForWidgetTracking()
                 tracker.start(TripWatch(agency: arrival.agency, routeId: arrival.routeId, stopId: arrival.stopId,
                                         vehicleId: followThisBus ? arrival.vehicleId : nil, threshold: threshold, createdAt: .now))
                 dismiss()

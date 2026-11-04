@@ -61,11 +61,13 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: me.singhdan.btownbus.widgets
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: $(inherited) WIDGET_EXTENSION
         GENERATE_INFOPLIST_FILE: YES
     info:
       path: BTownBusWidgets/Info.plist
       properties:
         CFBundleDisplayName: B-Town Bus
+        NSWidgetUsesLocation: true
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
 schemes:

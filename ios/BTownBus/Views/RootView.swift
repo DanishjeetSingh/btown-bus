@@ -40,7 +40,7 @@ struct RootView: View {
         .onAppear {
             location.requestPermission()
             if !UserDefaults.standard.bool(forKey: "tab-chosen") {
-                tab = store.favorites.isEmpty ? .nearby : .saved
+                tab = store.saved.isEmpty ? .nearby : .saved
                 UserDefaults.standard.set(true, forKey: "tab-chosen")
             }
             if !store.hasChosenRoutes { showRoutes = true }

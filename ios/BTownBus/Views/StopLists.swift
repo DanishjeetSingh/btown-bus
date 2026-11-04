@@ -13,28 +13,29 @@ struct SavedView: View {
                 HStack(alignment: .firstTextBaseline) {
                     Text("Saved stops").font(Theme.display(34)).foregroundStyle(Theme.ink)
                     Spacer()
-                    if store.favoriteStops.count > 1 {
+                    if store.savedStops.count > 1 {
                         Button(editing ? "Done" : "Reorder") { withAnimation { editing.toggle() } }
                             .font(.system(size: 13, weight: .heavy)).foregroundStyle(Theme.muted)
                     }
                 }
                 StatusBanners()
-                if store.favoriteStops.isEmpty {
+                let savedStops = store.savedStops
+                if savedStops.isEmpty {
                     EmptySaved()
                 } else if editing {
-                    ForEach(Array(store.favoriteStops.enumerated()), id: \.element.id) { index, stop in
+                    ForEach(Array(savedStops.enumerated()), id: \.element.stop.id) { index, item in
                         HStack {
-                            Text(stop.name).font(.system(size: 16, weight: .heavy)).foregroundStyle(Theme.ink)
+                            Text(store.placeName(item.stop)).font(.system(size: 16, weight: .heavy)).foregroundStyle(Theme.ink)
                             Spacer()
                             Button { store.moveFavorites(from: [index], to: max(0, index - 1)) } label: { Image(systemName: "arrow.up") }.disabled(index == 0)
-                            Button { store.moveFavorites(from: [index], to: min(store.favoriteStops.count, index + 2)) } label: { Image(systemName: "arrow.down") }.disabled(index == store.favoriteStops.count - 1)
+                            Button { store.moveFavorites(from: [index], to: min(savedStops.count, index + 2)) } label: { Image(systemName: "arrow.down") }.disabled(index == savedStops.count - 1)
                         }
                         .font(.system(size: 16, weight: .black)).foregroundStyle(Theme.ink)
                         .padding(14).chunky(radius: 18, lift: 2)
                     }
                 } else {
-                    ForEach(store.favoriteStops) { stop in
-                        StopCard(stop: stop, distance: location.distance(to: stop)) { openStop = stop }
+                    ForEach(savedStops, id: \.stop.id) { item in
+                        StopCard(stop: item.stop, distance: location.distance(to: item.stop), only: item.saved.routes) { openStop = item.stop }
                     }
                 }
                 FinePrint()
@@ -52,7 +53,7 @@ private struct EmptySaved: View {
         VStack(spacing: 12) {
             Image(systemName: "star.fill").font(.system(size: 44)).foregroundStyle(Color.busYellow).rotationEffect(.degrees(-8))
             Text("Star the stops you use").font(Theme.display(22)).foregroundStyle(Theme.ink).multilineTextAlignment(.center)
-            Text("Tap the star on any stop and it lands here with live times, one tap from opening the app.")
+            Text("Tap the star on any stop, or save just the buses you ride there. They land here with live times.")
                 .font(.system(size: 15, weight: .medium)).foregroundStyle(Theme.muted).multilineTextAlignment(.center)
             Button { tab = .nearby } label: {
                 Text("Find stops nearby").font(.system(size: 16, weight: .black)).foregroundStyle(Color.busInk)
@@ -111,19 +112,23 @@ struct StopCard: View {
     @Environment(LocationService.self) private var location
     let stop: TransitStop
     let distance: CLLocationDistance?
+    /// Saved buses to show; empty shows every bus at the stop.
+    var only: [TransitKey] = []
     let open: () -> Void
 
     var body: some View {
-        let arrivals = Array(store.arrivals(at: stop.id).prefix(4))
+        let all = store.arrivals(atPlace: stop)
+        let arrivals = Array((only.isEmpty ? all : all.filter { only.contains($0.routeKey) }).prefix(4))
+        let agencies = store.members(of: stop).map(\.agency)
         let here = location.isAtStop(stop)
         ZStack(alignment: .topTrailing) {
             Button(action: open) {
                 VStack(alignment: .leading, spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(stop.name).font(Theme.display(18, .heavy)).foregroundStyle(Theme.ink).multilineTextAlignment(.leading)
+                        Text(store.placeName(stop)).font(Theme.display(18, .heavy)).foregroundStyle(Theme.ink).multilineTextAlignment(.leading)
                         HStack(spacing: 5) {
-                            RoundedRectangle(cornerRadius: 3).fill(Color(hex: stop.agency.colorHex)).frame(width: 9, height: 9)
-                            Text(stop.agency.name)
+                            AgencyMarks(agencies: agencies)
+                            Text(agencies.count > 1 ? "IU + BT" : stop.agency.name)
                             if here {
                                 Text("YOU'RE HERE").font(.system(size: 10, weight: .black)).foregroundStyle(Theme.goInk)
                                     .padding(.horizontal, 8).padding(.vertical, 3).background(Theme.go, in: Capsule())
@@ -136,7 +141,7 @@ struct StopCard: View {
                     .padding(.trailing, 48)
                     FlowRow(spacing: 7) {
                         if arrivals.isEmpty {
-                            Text(store.arrivalsLoadedFor.contains(stop.id) ? "No buses due soon" : "Checking times…")
+                            Text(!store.loadedArrivals(atPlace: stop) ? "Checking times…" : only.isEmpty ? "No buses due soon" : "Your buses aren't due soon")
                                 .font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.muted)
                         }
                         ForEach(Array(arrivals.enumerated()), id: \.element.id) { index, arrival in
@@ -150,6 +155,19 @@ struct StopCard: View {
             }
             .buttonStyle(PressStyle())
             StarButton(stop: stop).padding(10)
+        }
+    }
+}
+
+/// A little colored square per agency serving the stop.
+struct AgencyMarks: View {
+    let agencies: [Agency]
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(agencies, id: \.self) { agency in
+                RoundedRectangle(cornerRadius: 3).fill(Color(hex: agency.colorHex)).frame(width: 9, height: 9)
+            }
         }
     }
 }

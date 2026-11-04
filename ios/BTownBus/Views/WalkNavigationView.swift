@@ -22,7 +22,7 @@ struct WalkNavigationView: View {
     // MARK: The bus you're racing
 
     private var arrival: TransitArrival? {
-        tracked ? tracker.status?.arrival : store.arrivals(at: pickup.id).first
+        tracked ? tracker.status?.arrival : store.arrivals(atPlace: pickup).first
     }
     private var bus: TransitVehicle? {
         tracked ? tracker.status?.vehicle : arrival.flatMap { store.vehicle($0.agency, $0.vehicleId) }

@@ -22,7 +22,7 @@ struct TripView: View {
     /// A tracked trip whose pickup is this sheet's stop.
     private var trip: TripWatch? {
         guard let watch = tracker.watch else { return nil }
-        if let walkOnlyStop, watch.stopKey != walkOnlyStop.id { return nil }
+        if let walkOnlyStop, !store.members(of: walkOnlyStop).contains(where: { $0.id == watch.stopKey }) { return nil }
         return watch
     }
 
@@ -31,7 +31,7 @@ struct TripView: View {
     /// The bus that matters: the tracked one, or the next one due at this stop.
     private var arrival: TransitArrival? {
         if trip != nil { return tracker.status?.arrival }
-        return pickup.map { store.arrivals(at: $0.id) }?.first
+        return pickup.map { store.arrivals(atPlace: $0) }?.first
     }
 
     private var bus: TransitVehicle? {
@@ -117,9 +117,9 @@ struct TripView: View {
         } else if let pickup {
             if !atPickup { yellowButton("Start walking", symbol: "location.north.line.fill") { navigating = true } }
             sectionLabel("ARRIVING")
-            let arrivals = store.arrivals(at: pickup.id)
+            let arrivals = store.arrivals(atPlace: pickup)
             if arrivals.isEmpty {
-                emptyNote(store.arrivalsLoadedFor.contains(pickup.id) ? "No buses predicted for this stop right now." : "Checking arrival times…")
+                emptyNote(store.loadedArrivals(atPlace: pickup) ? "No buses predicted for this stop right now." : "Checking arrival times…")
             }
             ForEach(arrivals.prefix(6)) { arrival in
                 ArrivalRow(arrival: arrival, tracking: tracker.isTracking(arrival)) {

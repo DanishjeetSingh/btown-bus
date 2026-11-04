@@ -4,6 +4,7 @@ import UserNotifications
 import Observation
 import CoreLocation
 import UIKit
+import WidgetKit
 
 /// A bus + stop the user asked to be told about.
 struct TripWatch: Codable, Equatable {
@@ -55,6 +56,8 @@ final class TripTracker {
     @ObservationIgnored private var lostBusSince: Date?
     @ObservationIgnored private var notified: Set<String> = []
     @ObservationIgnored private var ticking = false
+    /// Started from the widget: show the Live Activity right away rather than waiting for the bus to get close.
+    @ObservationIgnored private var startActivityNow = false
 
     init() {
         if let data = UserDefaults.standard.data(forKey: Self.storageKey),
@@ -87,6 +90,23 @@ final class TripTracker {
         LocationService.shared.requestPermission()
         LocationService.shared.setBackgroundTracking(true)
         startLoop()
+    }
+
+    /// From a Saved Stops widget row. Runs inside the widget's intent, which is what allows
+    /// a Live Activity to start while the app is in the background, so it waits for that start.
+    func toggleFromWidget(agency: Agency, stopId: String, routeId: String) async {
+        if let watch, watch.agency == agency, watch.stopId == stopId, watch.routeId == routeId {
+            stop()
+            return
+        }
+        let threshold = UserDefaults.standard.object(forKey: "threshold") as? Int ?? 5
+        start(TripWatch(agency: agency, routeId: routeId, stopId: stopId, vehicleId: nil, threshold: threshold, createdAt: .now))
+        startActivityNow = true
+        let deadline = Date().addingTimeInterval(10)
+        while startActivityNow, Date() < deadline {
+            try? await Task.sleep(for: .milliseconds(200))
+        }
+        startActivityNow = false
     }
 
     func stop() {
@@ -207,8 +227,9 @@ final class TripTracker {
             finish(with: next, stop: stop)
             return
         }
-        if activity == nil, close, arrival != nil {
+        if activity == nil, (close && arrival != nil) || startActivityNow {
             startActivity(watch: watch, route: route, stop: stop, status: next)
+            startActivityNow = false
         } else if let activity {
             let alert = alertFor(phase: phase, previous: previousPhase, route: route, stop: stop, status: next)
             await activity.update(content(for: next), alertConfiguration: alert)
@@ -357,5 +378,10 @@ final class TripTracker {
     private func save() {
         if let watch, let data = try? JSONEncoder().encode(watch) { UserDefaults.standard.set(data, forKey: Self.storageKey) }
         else { UserDefaults.standard.removeObject(forKey: Self.storageKey) }
+        let tracking = watch.map { "\($0.agency.rawValue):\($0.stopId):\($0.routeId)" }
+        if SavedStopsShare.tracking != tracking {
+            SavedStopsShare.tracking = tracking
+            WidgetCenter.shared.reloadTimelines(ofKind: SavedStopsShare.widgetKind)
+        }
     }
 }

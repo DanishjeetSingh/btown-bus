@@ -10,6 +10,7 @@
 		011C850714981746927FAFFB /* MapScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65E206087E3356A416B338CA /* MapScreen.swift */; };
 		0F07568F6A84E0555C4A3AC7 /* SavedStopsWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBA8EDF6E59EDF930474BCDB /* SavedStopsWidget.swift */; };
 		24395CB3F6FBC389A7E94AD6 /* SavedStopsShare.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3E19F78845960795B0D7563 /* SavedStopsShare.swift */; };
+		3BC5B3E9E3063647B9C69CBB /* RefreshSavedStopsIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = F800EFF6D60C06C3420BDFB4 /* RefreshSavedStopsIntent.swift */; };
 		3D6AC17B91DB85175AC6B939 /* WalkingProgress.swift in Sources */ = {isa = PBXBuildFile; fileRef = A509D083A3E61EDAB46EB140 /* WalkingProgress.swift */; };
 		40BFF13EBF4EF5EE41C5F13A /* AppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94C98608376A89DFF8E5C8E3 /* AppStore.swift */; };
 		4586B9EA12A75C4E2195CADE /* BTownBusWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F72D095F9FA0F1AE092AF0A3 /* BTownBusWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -21,6 +22,7 @@
 		5B6BB2720E9E0A7B978E7B6C /* TransitModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AF7514BDEAB86B9A724B4C9 /* TransitModels.swift */; };
 		5F23E736FDD5AB805DD7FCD3 /* LocationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BCB0D0C614547EBF501C56A /* LocationService.swift */; };
 		661B19C6DF978671D970237C /* EndWalkingIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8E7B816C7D2ADEAD05CEEA3 /* EndWalkingIntent.swift */; };
+		6AABF10A402D6862B73AEF56 /* TrackBusIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD8F35FD19A55D330E422BA /* TrackBusIntent.swift */; };
 		6AFF4C48CE24B8D80F8FFFB9 /* BTownBusApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2A0282D3417A955B033E194 /* BTownBusApp.swift */; };
 		7BE75D85FF2CCCB8C8AF88F0 /* TripLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDED350AD323158D41B30EB3 /* TripLiveActivity.swift */; };
 		7D3143B4CC7DB4C592934580 /* TripView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42715E8D0603B2BFE996742B /* TripView.swift */; };
@@ -37,6 +39,7 @@
 		C468F2B46B8583CA939551A1 /* TransitModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AF7514BDEAB86B9A724B4C9 /* TransitModels.swift */; };
 		C5CD47788D630EFE9A35A9FE /* WalkingActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100176B028F2DB6E8773F909 /* WalkingActivityAttributes.swift */; };
 		CB6B2D2FCCFE62693756CE30 /* StopLists.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F7B871F4E9794050894D1CE /* StopLists.swift */; };
+		CFADFF85D84F1316E35D70A1 /* TrackBusIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD8F35FD19A55D330E422BA /* TrackBusIntent.swift */; };
 		D7E4977E0FADF9585DFBC7EF /* RoutePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 172A3591DA6CC653D4021442 /* RoutePickerView.swift */; };
 		DEFDE477985C785A222627C6 /* SavedStopsShare.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3E19F78845960795B0D7563 /* SavedStopsShare.swift */; };
 		DF6E813862D753ABA8BB2B09 /* EndTripIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCD5947F1A856A2806104D4A /* EndTripIntent.swift */; };
@@ -95,12 +98,14 @@
 		B290FB15346046857E10F166 /* WalkingRoutePreference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalkingRoutePreference.swift; sourceTree = "<group>"; };
 		C2A0282D3417A955B033E194 /* BTownBusApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BTownBusApp.swift; sourceTree = "<group>"; };
 		C8E7B816C7D2ADEAD05CEEA3 /* EndWalkingIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EndWalkingIntent.swift; sourceTree = "<group>"; };
+		CAD8F35FD19A55D330E422BA /* TrackBusIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackBusIntent.swift; sourceTree = "<group>"; };
 		CDED350AD323158D41B30EB3 /* TripLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripLiveActivity.swift; sourceTree = "<group>"; };
 		CE552A54CEAA3881F9554023 /* BTownBusWidgets.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BTownBusWidgets.entitlements; sourceTree = "<group>"; };
 		DCD5947F1A856A2806104D4A /* EndTripIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EndTripIntent.swift; sourceTree = "<group>"; };
 		EBA8EDF6E59EDF930474BCDB /* SavedStopsWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedStopsWidget.swift; sourceTree = "<group>"; };
 		F3E19F78845960795B0D7563 /* SavedStopsShare.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedStopsShare.swift; sourceTree = "<group>"; };
 		F72D095F9FA0F1AE092AF0A3 /* BTownBusWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = BTownBusWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		F800EFF6D60C06C3420BDFB4 /* RefreshSavedStopsIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RefreshSavedStopsIntent.swift; sourceTree = "<group>"; };
 		F8102DF4E09833C1298E1511 /* TripMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripMath.swift; sourceTree = "<group>"; };
 		FC28256C7F769BDA0D1903C2 /* TripActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripActivityAttributes.swift; sourceTree = "<group>"; };
 		FFD0FE920E1CF611A6FF4325 /* BTownBus.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = BTownBus.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -151,6 +156,7 @@
 				DCD5947F1A856A2806104D4A /* EndTripIntent.swift */,
 				C8E7B816C7D2ADEAD05CEEA3 /* EndWalkingIntent.swift */,
 				F3E19F78845960795B0D7563 /* SavedStopsShare.swift */,
+				CAD8F35FD19A55D330E422BA /* TrackBusIntent.swift */,
 				FC28256C7F769BDA0D1903C2 /* TripActivityAttributes.swift */,
 				100176B028F2DB6E8773F909 /* WalkingActivityAttributes.swift */,
 			);
@@ -204,6 +210,7 @@
 			children = (
 				CE552A54CEAA3881F9554023 /* BTownBusWidgets.entitlements */,
 				769D58977B9A176B8FD095EE /* Info.plist */,
+				F800EFF6D60C06C3420BDFB4 /* RefreshSavedStopsIntent.swift */,
 				EBA8EDF6E59EDF930474BCDB /* SavedStopsWidget.swift */,
 				CDED350AD323158D41B30EB3 /* TripLiveActivity.swift */,
 				4E739C72A5276FC3334C84E8 /* WalkingLiveActivity.swift */,
@@ -318,6 +325,7 @@
 				9AB3EB5F9D8E128398455747 /* StopDetailView.swift in Sources */,
 				CB6B2D2FCCFE62693756CE30 /* StopLists.swift in Sources */,
 				FDE468B25FD4CBF1A45823F8 /* Theme.swift in Sources */,
+				CFADFF85D84F1316E35D70A1 /* TrackBusIntent.swift in Sources */,
 				89AC67BC2B91C3A54D7BE04E /* TransitClient.swift in Sources */,
 				C468F2B46B8583CA939551A1 /* TransitModels.swift in Sources */,
 				E94D719BE495A99187B55C00 /* TripActivityAttributes.swift in Sources */,
@@ -339,8 +347,10 @@
 			files = (
 				8BC1212C8366DE333A260C4E /* EndTripIntent.swift in Sources */,
 				4FCE42B7B9247DEDE21C3174 /* EndWalkingIntent.swift in Sources */,
+				3BC5B3E9E3063647B9C69CBB /* RefreshSavedStopsIntent.swift in Sources */,
 				DEFDE477985C785A222627C6 /* SavedStopsShare.swift in Sources */,
 				0F07568F6A84E0555C4A3AC7 /* SavedStopsWidget.swift in Sources */,
+				6AABF10A402D6862B73AEF56 /* TrackBusIntent.swift in Sources */,
 				55F8033E6B09C4EC93F1A0B2 /* TransitClient.swift in Sources */,
 				5B6BB2720E9E0A7B978E7B6C /* TransitModels.swift in Sources */,
 				8B776821D796D4AFFF851104 /* TripActivityAttributes.swift in Sources */,
@@ -480,6 +490,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = me.singhdan.btownbus.widgets;
 				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) WIDGET_EXTENSION";
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
@@ -558,6 +569,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = me.singhdan.btownbus.widgets;
 				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) WIDGET_EXTENSION";
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
