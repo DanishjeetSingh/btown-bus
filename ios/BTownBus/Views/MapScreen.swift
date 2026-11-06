@@ -136,7 +136,7 @@ struct MapScreen: View {
         }
         .onAppear { fitRoutes() }
         .onDisappear { location.setMapHeading(false) }
-        .onChange(of: store.activeRoutes) { _, _ in letGo(); fitRoutes() }
+        .onChange(of: store.activeRoutes) { _, _ in if !withBus { letGo(); fitRoutes() } }
         // Follow you and the bus: the bus moves every feed update, you move with GPS, and the map turns with the phone.
         .onChange(of: trackedBus?.updatedAt) { _, _ in if withBus { frameMeAndBus() } }
         .onChange(of: location.location?.timestamp) { _, _ in if withBus { frameMeAndBus() } }

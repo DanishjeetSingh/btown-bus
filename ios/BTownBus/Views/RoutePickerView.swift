@@ -18,7 +18,7 @@ struct RoutePickerView: View {
                 ForEach(Agency.allCases.sorted { a, _ in a == .iu }, id: \.self) { agency in
                     let routes = store.routes.filter { $0.agency == agency }
                     if !routes.isEmpty {
-                        let allOn = routes.allSatisfy { store.activeRoutes.contains($0.id) }
+                        let allOn = routes.allSatisfy { store.isRouteOn($0.id) }
                         VStack(alignment: .leading, spacing: 10) {
                             HStack {
                                 RoundedRectangle(cornerRadius: 3).fill(Color(hex: agency.colorHex)).frame(width: 9, height: 9)
@@ -55,7 +55,8 @@ private struct RouteToggle: View {
     let route: TransitRoute
 
     var body: some View {
-        let on = store.activeRoutes.contains(route.id)
+        let on = store.isRouteOn(route.id)
+        let locked = store.lockedRoute == route.id
         Button { store.toggleRoute(route) } label: {
             HStack(spacing: 10) {
                 Text(route.shortName).font(Theme.display(14))
@@ -64,8 +65,14 @@ private struct RouteToggle: View {
                     .frame(minWidth: 38, minHeight: 38).padding(.horizontal, 2)
                     .background(on ? Theme.surface : Color(hex: route.colorHex), in: RoundedRectangle(cornerRadius: 10))
                     .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.edge, lineWidth: 2))
-                Text(route.longName).font(.system(size: 12.5, weight: .semibold)).lineLimit(2).multilineTextAlignment(.leading)
-                    .foregroundStyle(on ? Color.readableInk(on: route.colorHex) : Theme.muted)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(route.longName).font(.system(size: 12.5, weight: .semibold)).lineLimit(2).multilineTextAlignment(.leading)
+                    if locked {
+                        // You're riding this one; hiding it mid-trip would lose the bus.
+                        Label("Tracking", systemImage: "lock.fill").font(.system(size: 11, weight: .black))
+                    }
+                }
+                .foregroundStyle(on ? Color.readableInk(on: route.colorHex) : Theme.muted)
                 Spacer(minLength: 0)
             }
             .padding(6).frame(minHeight: 54)
@@ -73,5 +80,6 @@ private struct RouteToggle: View {
         }
         .buttonStyle(PressStyle())
         .sensoryFeedback(.selection, trigger: on)
+        .accessibilityHint(locked ? "You're tracking a bus on this route, so it stays on until tracking ends." : "")
     }
 }

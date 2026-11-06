@@ -69,7 +69,7 @@ private struct Chrome: ViewModifier {
                             HStack(spacing: 6) {
                                 Image(systemName: "point.topleft.down.to.point.bottomright.curvepath.fill").font(.system(size: 13, weight: .bold))
                                 Text("Routes").font(.system(size: 14, weight: .heavy))
-                                Text("\(store.activeRoutes.count)")
+                                Text("\(store.pickedRoutes.count)")
                                     .font(.system(size: 12, weight: .black))
                                     .foregroundStyle(Color.busYellow)
                                     .frame(minWidth: 24, minHeight: 24)

@@ -33,6 +33,14 @@ final class AppStore {
     private(set) var activeRoutes: Set<TransitKey> {
         didSet { UserDefaults.standard.set(activeRoutes.map(\.description), forKey: "routes") }
     }
+    /// The tracked bus's route. It counts as picked for the whole trip and can't be turned off.
+    var lockedRoute: TransitKey? { TripTracker.shared.watch?.routeKey }
+    func isRouteOn(_ key: TransitKey) -> Bool { activeRoutes.contains(key) || lockedRoute == key }
+    /// Your routes plus the tracked one. Empty still means "no choice made", i.e. every route.
+    var pickedRoutes: Set<TransitKey> {
+        guard !activeRoutes.isEmpty, let lockedRoute else { return activeRoutes }
+        return activeRoutes.union([lockedRoute])
+    }
     var hasChosenRoutes: Bool { UserDefaults.standard.object(forKey: "routes") != nil }
     /// A stop the user has open, so its times are polled too.
     var focusedStop: TransitKey?
@@ -185,10 +193,11 @@ final class AppStore {
     func nearbyStops(from origin: CLLocation?, limit: Int = 8) -> [(stop: TransitStop, distance: CLLocationDistance)] {
         let origin = origin ?? Self.downtown
         // Re-sorting every stop on each GPS fix is wasted work; reuse the list until you've moved ~15 m.
-        if let cache = nearbyCache, cache.routes == activeRoutes, cache.limit == limit, cache.origin.distance(from: origin) < 15 {
+        let picked = pickedRoutes
+        if let cache = nearbyCache, cache.routes == picked, cache.limit == limit, cache.origin.distance(from: origin) < 15 {
             return cache.result.map { (stop: $0.stop, distance: origin.distance(from: $0.stop.location)) }
         }
-        let pool = activeRoutes.isEmpty ? stops : stops.filter { stop in stop.routeIds.contains { activeRoutes.contains(TransitKey(agency: stop.agency, id: $0)) } }
+        let pool = picked.isEmpty ? stops : stops.filter { stop in stop.routeIds.contains { picked.contains(TransitKey(agency: stop.agency, id: $0)) } }
         var seen = Set<TransitKey>()
         let result = pool.map { ($0, origin.distance(from: $0.location)) }.sorted { $0.1 < $1.1 }
             .filter { item in
@@ -198,7 +207,7 @@ final class AppStore {
                 return true
             }
             .prefix(limit).map { (stop: $0.0, distance: $0.1) }
-        nearbyCache = (origin, activeRoutes, limit, result)
+        nearbyCache = (origin, picked, limit, result)
         return result
     }
 
@@ -229,6 +238,7 @@ final class AppStore {
         if reordered != saved { saved = reordered }
     }
     func toggleRoute(_ route: TransitRoute) {
+        guard route.id != lockedRoute else { return }
         if activeRoutes.contains(route.id) { activeRoutes.remove(route.id) } else { activeRoutes.insert(route.id) }
     }
     /// Remember that the picker was seen, even if nothing was picked.
@@ -237,7 +247,7 @@ final class AppStore {
     }
     func setAgency(_ agency: Agency, on: Bool) {
         for route in routes where route.agency == agency {
-            if on { activeRoutes.insert(route.id) } else { activeRoutes.remove(route.id) }
+            if on { activeRoutes.insert(route.id) } else if route.id != lockedRoute { activeRoutes.remove(route.id) }
         }
     }
 
