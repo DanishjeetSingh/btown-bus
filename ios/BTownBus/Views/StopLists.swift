@@ -11,15 +11,17 @@ struct SavedView: View {
         let savedStops = ordered(store.savedStops)
         // A List, so a stop can be held and dragged into place like any iOS list.
         List {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Saved stops").font(Theme.display(34)).foregroundStyle(Theme.ink)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Saved stops").font(Theme.display(34)).foregroundStyle(Theme.ink)
+                    Spacer()
+                    if savedStops.count > 1 { OrderToggle(closestFirst: $closestFirst) }
+                }
                 // Up top, where it's seen even with a long list.
                 if savedStops.count > 1 {
-                    OrderToggle(closestFirst: $closestFirst)
-                    if !closestFirst {
-                        Label("Hold a stop and drag to reorder", systemImage: "hand.draw.fill")
-                            .font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.muted)
-                    }
+                    Label(closestFirst ? "Closest to you first" : "Hold a stop and drag to reorder",
+                          systemImage: closestFirst ? "location.fill" : "hand.draw.fill")
+                        .font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.muted)
                 }
             }
             .plainRow()
@@ -54,32 +56,25 @@ struct SavedView: View {
 
 }
 
-/// Two options, so both are always on screen: your own order, or closest first.
+/// One tap flips between your own order and closest first.
 private struct OrderToggle: View {
     @Binding var closestFirst: Bool
 
     var body: some View {
-        HStack(spacing: 4) {
-            option("My order", symbol: "hand.draw.fill", selected: !closestFirst) { closestFirst = false }
-            option("Closest first", symbol: "location.fill", selected: closestFirst) { closestFirst = true }
+        Button { withAnimation(.spring(duration: 0.25)) { closestFirst.toggle() } } label: {
+            HStack(spacing: 5) {
+                Image(systemName: closestFirst ? "location.fill" : "arrow.up.arrow.down").font(.system(size: 11, weight: .black))
+                Text(closestFirst ? "Closest" : "My order").font(.system(size: 13, weight: .heavy))
+            }
+            .foregroundStyle(Theme.ink)
+            .padding(.horizontal, 11).frame(height: 32)
+            .overlay(Capsule().strokeBorder(Theme.edge, lineWidth: 2))
+            .contentShape(Capsule())
         }
-        .padding(4)
-        .background(Theme.soft, in: Capsule())
-        .overlay(Capsule().strokeBorder(Theme.edge, lineWidth: 2.5))
+        .buttonStyle(PressStyle())
         .sensoryFeedback(.selection, trigger: closestFirst)
-    }
-
-    private func option(_ title: String, symbol: String, selected: Bool, action: @escaping () -> Void) -> some View {
-        Button { withAnimation(.spring(duration: 0.25)) { action() } } label: {
-            Label(title, systemImage: symbol)
-                .font(.system(size: 13.5, weight: .black))
-                .foregroundStyle(selected ? Color.busInk : Theme.muted)
-                .padding(.horizontal, 14).frame(height: 34)
-                .background(selected ? Color.busYellow : .clear, in: Capsule())
-                .overlay(Capsule().strokeBorder(selected ? Theme.edge : .clear, lineWidth: 2))
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityLabel(closestFirst ? "Sorted closest first" : "Sorted in your order")
+        .accessibilityHint("Switches the order")
     }
 }
 
