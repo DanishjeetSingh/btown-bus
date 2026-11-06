@@ -8,12 +8,25 @@ import AppIntents
 struct SavedStopsWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: SavedStopsShare.widgetKind, provider: SavedStopsProvider()) { entry in
-            SavedStopsView(entry: entry)
-                .containerBackground(for: .widget) { WidgetTheme.bg }
+            // Follows the app's Light / Dark setting, not just the phone's.
+            AppearanceOverride {
+                SavedStopsView(entry: entry)
+                    .containerBackground(for: .widget) { WidgetTheme.bg }
+            }
         }
         .configurationDisplayName("Saved Stops")
         .description("Your next bus at each saved stop, closest first. Tap one to track it.")
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
+    }
+}
+
+/// Uses the app's chosen appearance, or the phone's when it's set to match.
+private struct AppearanceOverride<Content: View>: View {
+    @Environment(\.colorScheme) private var system
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        content.environment(\.colorScheme, AppAppearance.current.colorScheme ?? system)
     }
 }
 

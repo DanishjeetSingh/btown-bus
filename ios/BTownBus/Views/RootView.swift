@@ -147,13 +147,32 @@ struct LocationPill: View {
 
     @ViewBuilder private var dot: some View {
         if location.freshLocation != nil {
-            // Only the dot's opacity animates, so nothing else in the bar moves.
+            // A steady dot with a faint ring that ripples out every few seconds: alive, but not flashing.
             Circle().fill(Theme.me).frame(width: 11, height: 11)
                 .overlay(Circle().strokeBorder(Color.busInk, lineWidth: 1.5))
-                .phaseAnimator([1.0, 0.25]) { dot, opacity in dot.opacity(opacity) } animation: { _ in .easeInOut(duration: 0.8) }
+                .background {
+                    Circle().stroke(Theme.me, lineWidth: 2).frame(width: 11, height: 11)
+                        .keyframeAnimator(initialValue: Ripple(), repeating: true) { ring, value in
+                            ring.scaleEffect(value.scale).opacity(value.opacity)
+                        } keyframes: { _ in
+                            KeyframeTrack(\.scale) {
+                                CubicKeyframe(2.1, duration: 1.3)
+                                LinearKeyframe(2.1, duration: 2.2)
+                            }
+                            KeyframeTrack(\.opacity) {
+                                CubicKeyframe(0, duration: 1.3)
+                                LinearKeyframe(0, duration: 2.2)
+                            }
+                        }
+                }
         } else {
             Circle().strokeBorder(Color.busInk, lineWidth: 2).frame(width: 11, height: 11)
         }
+    }
+
+    private struct Ripple {
+        var scale = 1.0
+        var opacity = 0.5
     }
 
     private func refresh() {

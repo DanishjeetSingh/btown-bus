@@ -62,9 +62,10 @@ private struct OrderToggle: View {
 
     var body: some View {
         Button { withAnimation(.spring(duration: 0.25)) { closestFirst.toggle() } } label: {
-            HStack(spacing: 5) {
-                Image(systemName: closestFirst ? "location.fill" : "arrow.up.arrow.down").font(.system(size: 11, weight: .black))
-                Text(closestFirst ? "Closest" : "My order").font(.system(size: 13, weight: .heavy))
+            // Both labels are laid out on top of each other and cross-fade, so the pill never changes width.
+            ZStack {
+                label("My order", symbol: "arrow.up.arrow.down").opacity(closestFirst ? 0 : 1)
+                label("Closest", symbol: "location.fill").opacity(closestFirst ? 1 : 0)
             }
             .foregroundStyle(Theme.ink)
             .padding(.horizontal, 11).frame(height: 32)
@@ -75,6 +76,13 @@ private struct OrderToggle: View {
         .sensoryFeedback(.selection, trigger: closestFirst)
         .accessibilityLabel(closestFirst ? "Sorted closest first" : "Sorted in your order")
         .accessibilityHint("Switches the order")
+    }
+
+    private func label(_ title: String, symbol: String) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: symbol).font(.system(size: 11, weight: .black))
+            Text(title).font(.system(size: 13, weight: .heavy))
+        }
     }
 }
 

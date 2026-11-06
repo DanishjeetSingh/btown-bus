@@ -117,20 +117,37 @@ func shortClock(_ date: Date) -> String {
 /// Yellow bar with the school-bus double trim.
 struct BrandBar<Trailing: View>: View {
     @ViewBuilder var trailing: Trailing
+    @AppStorage(AppAppearance.key, store: AppAppearance.defaults) private var appearance: AppAppearance = .system
 
     var body: some View {
         HStack(spacing: 10) {
-            Text("B")
-                .font(Theme.display(24))
-                .foregroundStyle(Color.busYellow)
-                .frame(width: 40, height: 40)
-                .background(Color.busInk, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .rotationEffect(.degrees(-4))
-            VStack(alignment: .leading, spacing: -2) {
-                Text("B-TOWN").font(Theme.display(17))
-                Text("BUS").font(Theme.display(17))
+            // The logo opens the app's one setting: light, dark, or match the phone.
+            Menu {
+                Picker(selection: $appearance) {
+                    ForEach(AppAppearance.allCases, id: \.self) { option in
+                        Label(option.title, systemImage: option.symbol).tag(option)
+                    }
+                } label: {
+                    Label("Appearance", systemImage: "paintbrush.fill")
+                }
+                .pickerStyle(.inline)
+            } label: {
+                HStack(spacing: 10) {
+                    Text("B")
+                        .font(Theme.display(24))
+                        .foregroundStyle(Color.busYellow)
+                        .frame(width: 40, height: 40)
+                        .background(Color.busInk, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .rotationEffect(.degrees(-4))
+                    VStack(alignment: .leading, spacing: -2) {
+                        Text("B-TOWN").font(Theme.display(17))
+                        Text("BUS").font(Theme.display(17))
+                    }
+                    .lineLimit(1).minimumScaleFactor(0.7)
+                }
+                .foregroundStyle(Color.busInk)
             }
-            .lineLimit(1).minimumScaleFactor(0.7)
+            .accessibilityLabel("B-Town Bus. Appearance")
             .layoutPriority(-1)
             Spacer()
             trailing

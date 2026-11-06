@@ -240,9 +240,13 @@ private struct LiveBuses: View {
     var body: some View {
         let allDown = store.failedAgencies.count == Agency.allCases.count
         VStack(alignment: .leading, spacing: 0) {
-            Button { withAnimation(.spring(duration: 0.3)) { expanded.toggle() } } label: {
+            Button { withAnimation(.spring(duration: 0.35, bounce: 0.1)) { expanded.toggle() } } label: {
                 HStack(spacing: 7) {
-                    Circle().fill(allDown ? Theme.warn : Theme.go).frame(width: 9, height: 9)
+                    if allDown {
+                        Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 11, weight: .black)).foregroundStyle(Theme.warn)
+                    } else {
+                        Circle().fill(Theme.me).frame(width: 9, height: 9)
+                    }
                     Text(buses.isEmpty ? (shown.isEmpty ? "Pick routes to see buses" : "No buses running") : "\(buses.count) \(buses.count == 1 ? "bus" : "buses") live")
                         .font(.system(size: 13, weight: .heavy)).foregroundStyle(Theme.ink)
                     if !shown.isEmpty {
@@ -256,43 +260,55 @@ private struct LiveBuses: View {
             .disabled(shown.isEmpty)
             if expanded {
                 breakdown
+                    // Fades in just behind the window opening, which reveals it from the top.
+                    .transition(.asymmetric(insertion: .opacity.animation(.easeOut(duration: 0.2).delay(0.1)),
+                                            removal: .opacity.animation(.easeIn(duration: 0.1))))
             }
         }
-        .frame(maxWidth: expanded ? 290 : nil, alignment: .leading)
+        // As wide as its contents, and clipped, so rows never spill past the window while it grows.
+        .fixedSize()
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .chunky(radius: 18, lift: 2)
     }
 
     private var breakdown: some View {
-        let routes = store.routes.filter { shown.contains($0.id) }
         let byRoute = Dictionary(grouping: buses) { bus in bus.routeId.map { TransitKey(agency: bus.agency, id: $0) } }
-        return ScrollView {
-            VStack(alignment: .leading, spacing: 6) {
-                ForEach(Array(store.failedAgencies).sorted { $0.rawValue < $1.rawValue }, id: \.self) { agency in
-                    Text("\(agency.shortName) feed is down").font(.system(size: 12.5, weight: .heavy)).foregroundStyle(Theme.warn)
-                }
-                ForEach(routes) { route in
-                    let running = byRoute[route.id] ?? []
-                    let stale = running.filter(\.isStale).count
-                    Button { if !running.isEmpty { show(running); withAnimation { expanded = false } } } label: {
-                        HStack(spacing: 9) {
-                            RouteTag(name: route.shortName, hex: route.colorHex, size: 30)
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(route.longName).font(.system(size: 13, weight: .heavy)).foregroundStyle(Theme.ink).lineLimit(1)
-                                Text(running.isEmpty ? "Not running now" : stale > 0 ? "\(stale) not reporting lately" : route.agency.name)
-                                    .font(.system(size: 11.5, weight: .semibold)).foregroundStyle(Theme.muted).lineLimit(1)
-                            }
-                            Spacer(minLength: 4)
-                            Text("\(running.count)").font(Theme.display(18)).foregroundStyle(running.isEmpty ? Theme.muted : Theme.ink)
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
+        // Busiest first; a long list is cut short rather than scrolled.
+        let routes = store.routes.filter { shown.contains($0.id) }.sorted { (byRoute[$0.id]?.count ?? 0) > (byRoute[$1.id]?.count ?? 0) }
+        let limit = 8
+        return VStack(alignment: .leading, spacing: 7) {
+            ForEach(Array(store.failedAgencies).sorted { $0.rawValue < $1.rawValue }, id: \.self) { agency in
+                Label("\(agency.shortName) feed is down", systemImage: "exclamationmark.triangle.fill")
+                    .font(.system(size: 12, weight: .heavy)).foregroundStyle(Theme.warn)
             }
-            .padding(.horizontal, 12).padding(.bottom, 12)
+            ForEach(routes.prefix(limit)) { route in
+                let running = byRoute[route.id] ?? []
+                let stale = running.filter(\.isStale).count
+                Button { if !running.isEmpty { show(running); withAnimation(.spring(duration: 0.3)) { expanded = false } } } label: {
+                    HStack(spacing: 8) {
+                        RouteTag(name: route.shortName, hex: route.colorHex, size: 26)
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text(route.longName).font(.system(size: 13, weight: .heavy)).lineLimit(1)
+                                .foregroundStyle(running.isEmpty ? Theme.muted : Theme.ink)
+                            if running.isEmpty || stale > 0 {
+                                Text(running.isEmpty ? "Not running" : "\(stale) not reporting")
+                                    .font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.muted)
+                            }
+                        }
+                        .frame(maxWidth: 170, alignment: .leading)
+                        Spacer(minLength: 10)
+                        Text("\(running.count)").font(Theme.display(16)).monospacedDigit()
+                            .foregroundStyle(running.isEmpty ? Theme.muted : Theme.ink)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+            if routes.count > limit {
+                Text("+\(routes.count - limit) more routes").font(.system(size: 11.5, weight: .semibold)).foregroundStyle(Theme.muted)
+            }
         }
-        .frame(maxHeight: 320)
-        .fixedSize(horizontal: false, vertical: true)
+        .padding(.horizontal, 13).padding(.bottom, 12)
     }
 }
 
