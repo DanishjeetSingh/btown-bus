@@ -11,10 +11,18 @@ struct SavedView: View {
         let savedStops = ordered(store.savedStops)
         // A List, so a stop can be held and dragged into place like any iOS list.
         List {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Saved stops").font(Theme.display(34)).foregroundStyle(Theme.ink)
-                Spacer()
-                if savedStops.count > 1 { sortMenu }
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Saved stops").font(Theme.display(34)).foregroundStyle(Theme.ink)
+                    Spacer()
+                    if savedStops.count > 1 { sortMenu }
+                }
+                // Up top, where it's seen even with a long list.
+                if savedStops.count > 1 {
+                    Label(closestFirst ? "Closest to you first" : "Hold a stop and drag to reorder",
+                          systemImage: closestFirst ? "location.fill" : "hand.draw.fill")
+                        .font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.muted)
+                }
             }
             .plainRow()
             StatusBanners().plainRow()
@@ -30,12 +38,6 @@ struct SavedView: View {
                     keys.move(fromOffsets: from, toOffset: to)
                     store.reorderSaved(keys)
                 })
-                if savedStops.count > 1 {
-                    Text(closestFirst ? "Sorted by distance from you." : "Hold a stop and drag to reorder.")
-                        .font(.system(size: 12.5, weight: .semibold)).foregroundStyle(Theme.muted)
-                        .frame(maxWidth: .infinity)
-                        .plainRow()
-                }
             }
             FinePrint().plainRow()
         }
@@ -240,11 +242,33 @@ struct StatusBanners: View {
     }
 }
 
+/// The sign-off at the bottom of a list, between two little route lines.
 struct FinePrint: View {
     var body: some View {
-        Text("Independent tracker")
-            .font(.system(size: 11.5)).foregroundStyle(Theme.muted)
-            .multilineTextAlignment(.center).frame(maxWidth: .infinity).padding(.top, 14)
+        HStack(spacing: 10) {
+            RouteLine()
+            Text("INDEPENDENT TRACKER")
+                .font(Theme.display(11.5)).tracking(1.6)
+                .foregroundStyle(Theme.ink)
+                .fixedSize()
+            RouteLine().scaleEffect(x: -1)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 18).padding(.bottom, 6)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Independent tracker")
+    }
+}
+
+/// A stretch of route drawn like the map: an open stop, the line, then a yellow stop.
+private struct RouteLine: View {
+    var body: some View {
+        HStack(spacing: 0) {
+            Circle().strokeBorder(Theme.ink, lineWidth: 2).frame(width: 9, height: 9)
+            Capsule().fill(Theme.ink).frame(width: 30, height: 3)
+            Circle().fill(Color.busYellow).frame(width: 13, height: 13)
+                .overlay(Circle().strokeBorder(Theme.ink, lineWidth: 2.5))
+        }
     }
 }
 
