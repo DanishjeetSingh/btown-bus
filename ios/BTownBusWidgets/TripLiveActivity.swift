@@ -26,9 +26,19 @@ struct TripLiveActivity: Widget {
                         .padding(.leading, 4)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    BusCountdown(state: state, size: 26)
-                        .frame(minWidth: 78, alignment: .trailing)
-                        .padding(.trailing, 4)
+                    // Stops away is what the bus is really doing; the feed's minutes drift, so they come second.
+                    VStack(alignment: .trailing, spacing: 1) {
+                        StopsAwayText(state: state, size: 26)
+                        if state.stopsAway != nil, state.phase != .departed {
+                            HStack(spacing: 2) {
+                                Text("≈")
+                                BusCountdown(state: state, size: 13)
+                            }
+                            .font(.system(size: 13, weight: .heavy)).foregroundStyle(Color.busCream.opacity(0.7))
+                        }
+                    }
+                    .frame(minWidth: 78, alignment: .trailing)
+                    .padding(.trailing, 4)
                 }
                 DynamicIslandExpandedRegion(.center) {
                     VStack(alignment: .leading, spacing: 2) {
@@ -52,10 +62,14 @@ struct TripLiveActivity: Widget {
             } compactLeading: {
                 RouteBadge(name: route.routeShortName, hex: route.routeColorHex, size: 24)
             } compactTrailing: {
-                BusCountdown(state: state, size: 15)
-                    .frame(maxWidth: 56)
+                StopsAwayText(state: state, size: 15)
+                    .frame(maxWidth: 60)
             } minimal: {
-                RouteBadge(name: route.routeShortName, hex: route.routeColorHex, size: 22)
+                if let stops = state.stopsAway, state.phase != .departed, state.phase != .arriving {
+                    Text("\(stops)").font(.system(size: 15, weight: .black).width(.expanded)).foregroundStyle(Color.busYellow)
+                } else {
+                    RouteBadge(name: route.routeShortName, hex: route.routeColorHex, size: 22)
+                }
             }
             .keylineTint(Color.busYellow)
         }
@@ -176,6 +190,31 @@ struct BusCountdown: View {
         .font(.system(size: size, weight: .black).width(.expanded))
         .foregroundStyle(Color.busYellow)
         .lineLimit(1).minimumScaleFactor(0.6)
+    }
+}
+
+/// "3 stops", "Next stop", or the countdown when the bus's position can't be counted.
+struct StopsAwayText: View {
+    let state: TripActivityAttributes.ContentState
+    let size: CGFloat
+
+    var body: some View {
+        if state.phase == .departed || state.phase == .arriving {
+            BusCountdown(state: state, size: size)
+        } else if let stops = state.stopsAway {
+            Group {
+                if stops <= 1 {
+                    Text("Next")
+                } else {
+                    Text("\(stops)") + Text(" stops").font(.system(size: size * 0.55, weight: .heavy))
+                }
+            }
+            .font(.system(size: size, weight: .black).width(.expanded))
+            .foregroundStyle(Color.busYellow)
+            .lineLimit(1).minimumScaleFactor(0.6)
+        } else {
+            BusCountdown(state: state, size: size)
+        }
     }
 }
 

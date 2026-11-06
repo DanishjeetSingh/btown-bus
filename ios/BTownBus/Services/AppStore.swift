@@ -202,6 +202,11 @@ final class AppStore {
     func toggleFavorite(_ stop: TransitStop) {
         if let entry = savedEntry(for: stop) { saved.removeAll { $0.stop == entry.stop } } else { saved.append(SavedStop(stop: stop.id)) }
     }
+    /// Save the stop with these buses (empty for every bus), or change an existing save's buses.
+    func saveStop(_ stop: TransitStop, routes: [TransitKey]) {
+        if let entry = savedEntry(for: stop), let index = saved.firstIndex(of: entry) { saved[index].routes = routes }
+        else { saved.append(SavedStop(stop: stop.id, routes: routes)) }
+    }
     /// Save just this bus at the stop, or add/remove it from the stop's saved buses.
     /// Removing the last one goes back to every bus.
     func toggleSavedRoute(_ route: TransitKey, at stop: TransitStop) {

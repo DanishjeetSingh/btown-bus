@@ -3,7 +3,7 @@ import WidgetKit
 import CoreLocation
 import AppIntents
 
-/// Home Screen widget: one row per saved stop (or saved bus), closest stop first.
+/// Home Screen widget: one row per bus line at each saved stop, closest stop first, with the bus after it.
 /// Tap a row to track that bus with a Live Activity, without opening the app.
 struct SavedStopsWidget: Widget {
     var body: some WidgetConfiguration {
@@ -29,12 +29,14 @@ struct SavedStopsEntry: TimelineEntry {
         var arrival: Date
     }
 
-    /// A saved stop, or one saved bus at a stop.
+    /// One bus line at a saved stop.
     struct Row: Hashable {
         var name: String
-        /// The saved bus, shown even when none is due. Nil for a stop saved with every bus.
+        /// Only the first row of each stop shows its name; the rest sit under it.
+        var showsName: Bool
+        /// The saved bus, shown even when none is due. Nil when nothing at all is due at the stop.
         var route: SavedStopsShare.Route?
-        /// Upcoming buses for this row, soonest first. The view skips ones that have left.
+        /// This line's upcoming buses, soonest first. The view skips ones that have left.
         var buses: [Bus]
     }
 
@@ -45,9 +47,11 @@ struct SavedStopsEntry: TimelineEntry {
     var tracking: String? = nil
 
     static let placeholder = SavedStopsEntry(date: .now, rows: [
-        Row(name: "Sample Gates", buses: [Bus(agency: "iu", stopId: "", routeId: "", route: "E", colorHex: "#0000a0", arrival: .now.addingTimeInterval(240))]),
-        Row(name: "7th & Woodlawn (IMU)", buses: [Bus(agency: "bt", stopId: "", routeId: "", route: "6", colorHex: "#9e6b3f", arrival: .now.addingTimeInterval(540))]),
-        Row(name: "Wells Library", buses: [Bus(agency: "iu", stopId: "", routeId: "", route: "X", colorHex: "#8a2983", arrival: .now.addingTimeInterval(780))]),
+        Row(name: "Sample Gates", showsName: true, buses: [Bus(agency: "iu", stopId: "", routeId: "", route: "E", colorHex: "#0000a0", arrival: .now.addingTimeInterval(240)),
+                                                           Bus(agency: "iu", stopId: "", routeId: "", route: "E", colorHex: "#0000a0", arrival: .now.addingTimeInterval(840))]),
+        Row(name: "Sample Gates", showsName: false, buses: [Bus(agency: "bt", stopId: "", routeId: "", route: "6", colorHex: "#9e6b3f", arrival: .now.addingTimeInterval(540))]),
+        Row(name: "Wells Library", showsName: true, buses: [Bus(agency: "iu", stopId: "", routeId: "", route: "X", colorHex: "#8a2983", arrival: .now.addingTimeInterval(780)),
+                                                            Bus(agency: "iu", stopId: "", routeId: "", route: "X", colorHex: "#8a2983", arrival: .now.addingTimeInterval(1500))]),
     ], fetchedAt: .now, failed: false)
 }
 
@@ -104,14 +108,24 @@ struct SavedStopsProvider: TimelineProvider {
                                                route: route?.shortName ?? arrival.routeId, colorHex: route?.colorHex ?? arrival.agency.colorHex,
                                                arrival: arrival.predictedArrival)
                 }
-            guard !stop.only.isEmpty else { return [.init(name: stop.name, buses: buses)] }
-            // One row per saved bus, soonest first.
-            return stop.only.map { key in
-                SavedStopsEntry.Row(name: stop.name, route: routes[key], buses: buses.filter { "\($0.agency):\($0.routeId)" == key })
+            // One row per line: every saved bus (even if none is due), or every line due at a stop saved with all buses.
+            let keys = stop.only.isEmpty ? buses.map { "\($0.agency):\($0.routeId)" }.uniqued() : stop.only
+            let lines = keys.map { key in
+                SavedStopsEntry.Row(name: stop.name, showsName: false, route: routes[key], buses: buses.filter { "\($0.agency):\($0.routeId)" == key })
             }
             .sorted { ($0.buses.first?.arrival ?? .distantFuture) < ($1.buses.first?.arrival ?? .distantFuture) }
+            var rows = lines.isEmpty ? [SavedStopsEntry.Row(name: stop.name, showsName: true, route: nil, buses: [])] : lines
+            rows[0].showsName = true
+            return rows
         }
         return SavedStopsEntry(date: now, rows: rows, fetchedAt: now, failed: arrivals == nil, tracking: tracking)
+    }
+}
+
+private extension Array where Element: Hashable {
+    func uniqued() -> [Element] {
+        var seen = Set<Element>()
+        return filter { seen.insert($0).inserted }
     }
 }
 
@@ -174,8 +188,9 @@ struct SavedStopsView: View {
             if entry.failed {
                 Image(systemName: "wifi.slash").font(.system(size: 10, weight: .bold)).foregroundStyle(WidgetTheme.muted)
             }
-            Text(entry.fetchedAt, style: .time)
+            Text(updatedLabel)
                 .font(.system(size: 10, weight: .bold)).foregroundStyle(WidgetTheme.muted)
+                .lineLimit(1).minimumScaleFactor(0.8)
             Button(intent: RefreshSavedStopsIntent()) {
                 Image(systemName: "arrow.clockwise").font(.system(size: 11, weight: .black)).foregroundStyle(WidgetTheme.ink)
                     .frame(width: 24, height: 24)
@@ -186,26 +201,38 @@ struct SavedStopsView: View {
         }
     }
 
-    /// {stop}   [bus | time]
+    /// "Updated just now", "Updated 4 min ago".
+    private var updatedLabel: String {
+        let minutes = Int(entry.date.timeIntervalSince(entry.fetchedAt) / 60)
+        if minutes < 1 { return "Updated just now" }
+        return small ? "\(minutes)m ago" : "Updated \(minutes) min ago"
+    }
+
+    /// {stop}   [bus | time]  then 12
     @ViewBuilder private func rowView(_ row: SavedStopsEntry.Row) -> some View {
-        let next = row.buses.first { $0.arrival > entry.date.addingTimeInterval(-30) }
+        let upcoming = row.buses.filter { $0.arrival > entry.date.addingTimeInterval(-30) }
+        let next = upcoming.first
         let tracked = next.map { "\($0.agency):\($0.stopId):\($0.routeId)" == entry.tracking } ?? false
-        let name = Text(row.name)
+        let name = Text(row.showsName ? row.name : "")
             .font(.system(size: small ? 13 : 15, weight: .heavy))
             .foregroundStyle(tracked ? Color.busInk : WidgetTheme.ink)
             .lineLimit(1).minimumScaleFactor(0.75)
+        let times = HStack(spacing: 6) {
+            chip(next: next, route: row.route, tracked: tracked)
+            if next != nil { then(upcoming.dropFirst().first, tracked: tracked) }
+        }
         let content = Group {
             if small {
                 VStack(alignment: .leading, spacing: 4) {
-                    name
-                    chip(next: next, route: row.route, tracked: tracked)
+                    if row.showsName { name }
+                    times
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 HStack(spacing: 10) {
                     name
                     Spacer(minLength: 4)
-                    chip(next: next, route: row.route, tracked: tracked)
+                    times
                 }
             }
         }
@@ -243,13 +270,31 @@ struct SavedStopsView: View {
         .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(WidgetTheme.edge, lineWidth: tracked ? 2 : 1.5))
     }
 
+    /// The bus after the coming one, as a quiet "then 12".
+    @ViewBuilder private func then(_ bus: SavedStopsEntry.Bus?, tracked: Bool) -> some View {
+        let color = tracked ? Color.busInk.opacity(0.7) : WidgetTheme.muted
+        Group {
+            if let bus {
+                let minutes = max(0, Int((bus.arrival.timeIntervalSince(entry.date) / 60).rounded(.up)))
+                if minutes >= 60 { Text("then ") + Text(bus.arrival, style: .time) }
+                else { Text("then \(minutes)") }
+            } else {
+                Text("then –")
+            }
+        }
+        .font(.system(size: 12, weight: .bold)).monospacedDigit()
+        .foregroundStyle(color)
+        .lineLimit(1).fixedSize()
+        .frame(minWidth: small ? 0 : 52, alignment: .leading)
+    }
+
     @ViewBuilder private func wait(_ bus: SavedStopsEntry.Bus?) -> some View {
         if let bus {
             let minutes = max(0, Int((bus.arrival.timeIntervalSince(entry.date) / 60).rounded(.up)))
             Group {
                 if minutes == 0 { Text("Now") }
                 else if minutes >= 60 { Text(bus.arrival, style: .time) }
-                else { Text("\(minutes)") + Text(" min").font(.system(size: 11, weight: .bold)).foregroundColor(WidgetTheme.muted) }
+                else { Text("\(minutes)") + Text(small ? "m" : " min").font(.system(size: 11, weight: .bold)).foregroundColor(WidgetTheme.muted) }
             }
             .font(.system(size: 16, weight: .black)).monospacedDigit()
             .foregroundStyle(WidgetTheme.ink)
