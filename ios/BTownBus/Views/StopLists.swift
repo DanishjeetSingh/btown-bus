@@ -1,52 +1,49 @@
 import SwiftUI
 import CoreLocation
-import UniformTypeIdentifiers
 
 struct SavedView: View {
     @Environment(AppStore.self) private var store
     @Environment(LocationService.self) private var location
     @Binding var openStop: TransitStop?
     @AppStorage("saved-sort-closest") private var closestFirst = false
-    @State private var dragging: TransitKey?
 
     var body: some View {
         let savedStops = ordered(store.savedStops)
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text("Saved stops").font(Theme.display(34)).foregroundStyle(Theme.ink)
-                    Spacer()
-                    if savedStops.count > 1 { sortMenu }
-                }
-                StatusBanners()
-                if savedStops.isEmpty {
-                    EmptySaved()
-                } else {
-                    ForEach(savedStops, id: \.stop.id) { item in
-                        let card = StopCard(stop: item.stop, distance: location.distance(to: item.stop), only: item.saved.routes) { openStop = item.stop }
-                        if closestFirst {
-                            card
-                        } else {
-                            // Hold a card and drag it to move it.
-                            card
-                                .contentShape(.dragPreview, RoundedRectangle(cornerRadius: 22, style: .continuous))
-                                .onDrag {
-                                    dragging = item.saved.stop
-                                    return NSItemProvider(object: item.saved.stop.description as NSString)
-                                }
-                                .onDrop(of: [.text], delegate: SavedReorder(target: item.saved.stop, dragging: $dragging, store: store))
-                        }
-                    }
-                    if savedStops.count > 1 {
-                        Text(closestFirst ? "Sorted by distance from you." : "Hold a stop and drag to reorder.")
-                            .font(.system(size: 12.5, weight: .semibold)).foregroundStyle(Theme.muted)
-                            .frame(maxWidth: .infinity)
-                    }
-                }
-                FinePrint()
+        // A List, so a stop can be held and dragged into place like any iOS list.
+        List {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Saved stops").font(Theme.display(34)).foregroundStyle(Theme.ink)
+                Spacer()
+                if savedStops.count > 1 { sortMenu }
             }
-            .padding(.horizontal, 14).padding(.top, 14).padding(.bottom, 24)
+            .plainRow()
+            StatusBanners().plainRow()
+            if savedStops.isEmpty {
+                EmptySaved().plainRow()
+            } else {
+                ForEach(savedStops, id: \.stop.id) { item in
+                    StopCard(stop: item.stop, distance: location.distance(to: item.stop), only: item.saved.routes) { openStop = item.stop }
+                        .plainRow()
+                }
+                .onMove(perform: closestFirst ? nil : { from, to in
+                    var keys = savedStops.map(\.saved.stop)
+                    keys.move(fromOffsets: from, toOffset: to)
+                    store.reorderSaved(keys)
+                })
+                if savedStops.count > 1 {
+                    Text(closestFirst ? "Sorted by distance from you." : "Hold a stop and drag to reorder.")
+                        .font(.system(size: 12.5, weight: .semibold)).foregroundStyle(Theme.muted)
+                        .frame(maxWidth: .infinity)
+                        .plainRow()
+                }
+            }
+            FinePrint().plainRow()
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .environment(\.defaultMinListRowHeight, 0)
+        .contentMargins(.top, 7, for: .scrollContent)
+        .contentMargins(.bottom, 17, for: .scrollContent)
         .refreshable { await store.refreshNow() }
     }
 
@@ -73,26 +70,12 @@ struct SavedView: View {
     }
 }
 
-/// Moves the dragged saved stop into place as it passes over the others.
-private struct SavedReorder: DropDelegate {
-    let target: TransitKey
-    @Binding var dragging: TransitKey?
-    let store: AppStore
-
-    func dropEntered(info: DropInfo) {
-        guard let dragging, dragging != target,
-              let from = store.saved.firstIndex(where: { $0.stop == dragging }),
-              let to = store.saved.firstIndex(where: { $0.stop == target }) else { return }
-        withAnimation(.spring(duration: 0.25)) {
-            store.moveFavorites(from: IndexSet(integer: from), to: to > from ? to + 1 : to)
-        }
-    }
-
-    func dropUpdated(info: DropInfo) -> DropProposal? { DropProposal(operation: .move) }
-
-    func performDrop(info: DropInfo) -> Bool {
-        dragging = nil
-        return true
+private extension View {
+    /// A List row that looks like the rest of the app's scrolling pages: no separators, no row background.
+    func plainRow() -> some View {
+        listRowInsets(EdgeInsets(top: 7, leading: 14, bottom: 7, trailing: 14))
+            .listRowSeparator(.hidden)
+            .listRowBackground(Color.clear)
     }
 }
 
@@ -259,7 +242,7 @@ struct StatusBanners: View {
 
 struct FinePrint: View {
     var body: some View {
-        Text("Independent tracker · Not affiliated with Bloomington Transit or Indiana University.")
+        Text("Independent tracker")
             .font(.system(size: 11.5)).foregroundStyle(Theme.muted)
             .multilineTextAlignment(.center).frame(maxWidth: .infinity).padding(.top, 14)
     }

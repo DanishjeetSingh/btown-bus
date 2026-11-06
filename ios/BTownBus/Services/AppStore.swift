@@ -222,7 +222,12 @@ final class AppStore {
         if let position = saved[index].routes.firstIndex(of: route) { saved[index].routes.remove(at: position) }
         else { saved[index].routes.append(route) }
     }
-    func moveFavorites(from source: IndexSet, to destination: Int) { saved.move(fromOffsets: source, toOffset: destination) }
+    /// Put saved stops in this order; any not listed keep their place at the end.
+    func reorderSaved(_ keys: [TransitKey]) {
+        let rank = Dictionary(uniqueKeysWithValues: keys.enumerated().map { ($1, $0) })
+        let reordered = saved.enumerated().sorted { (rank[$0.element.stop] ?? keys.count + $0.offset) < (rank[$1.element.stop] ?? keys.count + $1.offset) }.map(\.element)
+        if reordered != saved { saved = reordered }
+    }
     func toggleRoute(_ route: TransitRoute) {
         if activeRoutes.contains(route.id) { activeRoutes.remove(route.id) } else { activeRoutes.insert(route.id) }
     }

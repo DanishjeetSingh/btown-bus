@@ -87,7 +87,21 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
     func setWalkingNavigation(_ on: Bool) {
         manager.desiredAccuracy = on ? kCLLocationAccuracyBestForNavigation : kCLLocationAccuracyNearestTenMeters
         manager.distanceFilter = on ? 2 : 8
-        if on, CLLocationManager.headingAvailable() {
+        walkingWantsHeading = on
+        updateHeading()
+    }
+
+    /// The map's compass mode turns the map with the phone.
+    func setMapHeading(_ on: Bool) {
+        mapWantsHeading = on
+        updateHeading()
+    }
+
+    @ObservationIgnored private var walkingWantsHeading = false
+    @ObservationIgnored private var mapWantsHeading = false
+
+    private func updateHeading() {
+        if walkingWantsHeading || mapWantsHeading, CLLocationManager.headingAvailable() {
             manager.headingFilter = 8
             manager.startUpdatingHeading()
         } else {

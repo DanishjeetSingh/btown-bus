@@ -79,6 +79,10 @@ struct TransitVehicle: Identifiable, Hashable {
     var lastStopId: String? = nil
     /// The feed's own list of the bus's next stops, in order. Short (1–5 stops) and can run into the bus's next trip.
     var nextStops: [String] = []
+    /// Minutes to each of `nextStops`, from the feed.
+    var nextStopMinutes: [Int] = []
+    /// Minutes ahead of schedule; negative is late. Nil when the feed doesn't say.
+    var onSchedule: Double? = nil
     var updatedAt: Date
 
     var id: TransitKey { TransitKey(agency: agency, id: vehicleId) }
