@@ -2,24 +2,37 @@ import Foundation
 import MapKit
 
 /// A second opinion on when the tracked bus reaches your stop, from Apple Maps driving times (which
-/// account for traffic): the bus to its next stop, then stop to stop up to yours, plus a short stop at
-/// each one on the way. Only ever for the one bus being tracked, to stay well inside Apple's limits.
+/// account for traffic): the bus to its next stop, then stop to stop up to yours, plus some time for
+/// each stop on the way. Only ever for the one bus being tracked, to stay well inside Apple's limits.
 @MainActor
 final class MapsETA {
     static let shared = MapsETA()
-    /// Typical time a bus spends at each stop it makes on the way.
-    static let dwell: TimeInterval = 20
+    private static let dwellKey = "maps-eta-seconds-per-stop"
 
-    private var latest: (key: String, arrival: Date, at: Date)?
+    /// Time added per stop on the way. A bus only stops when someone's waiting or rings, so this isn't
+    /// a full stop each time: it starts at 10 s (about every other stop) and is learned from real trips.
+    private(set) var secondsPerStop: TimeInterval = UserDefaults.standard.object(forKey: dwellKey) as? Double ?? 10
+
+    /// Pure driving time to your stop, and how many stops sit between the bus and yours.
+    private var latest: (key: String, driveArrival: Date, stopsBetween: Int, at: Date)?
     /// Stop-to-stop driving times. Traffic changes slowly, so these are reused for 10 minutes.
     private var segments: [String: (seconds: TimeInterval, at: Date)] = [:]
     private var running = false
     private var nextRun = Date.distantPast
 
     /// The latest estimate for this bus reaching this stop, if it's recent.
-    func arrival(bus: TransitKey, stop: TransitKey) -> Date? {
+    func estimate(bus: TransitKey, stop: TransitKey) -> (arrival: Date, driveArrival: Date, stopsBetween: Int)? {
         guard let latest, latest.key == "\(bus)>\(stop)", Date().timeIntervalSince(latest.at) < 180 else { return nil }
-        return latest.arrival
+        let arrival = latest.driveArrival.addingTimeInterval(secondsPerStop * Double(latest.stopsBetween))
+        return (arrival, latest.driveArrival, latest.stopsBetween)
+    }
+
+    /// After a trip: on average the bus lost this much per stop on the way, beyond driving time.
+    /// Move partway toward it, so one odd trip doesn't swing the estimate.
+    func learn(secondsPerStop observed: TimeInterval) {
+        let clamped = min(45, max(0, observed))
+        secondsPerStop = (secondsPerStop * 0.7 + clamped * 0.3).rounded()
+        UserDefaults.standard.set(secondsPerStop, forKey: Self.dwellKey)
     }
 
     /// Starts a new estimate if one is due (at most once a minute) and returns right away.
@@ -44,9 +57,8 @@ final class MapsETA {
                     segments[segment] = (seconds, Date())
                     total += seconds
                 }
-                total += Self.dwell * Double(path.count - 1)
                 // The bus was at that position when it last reported, not now.
-                latest = (key, bus.updatedAt.addingTimeInterval(total), Date())
+                latest = (key, bus.updatedAt.addingTimeInterval(total), path.count - 1, Date())
             } catch let error as MKError where error.code == .loadingThrottled {
                 // Apple asks apps to back off when throttled.
                 nextRun = Date().addingTimeInterval(180)
@@ -82,7 +94,7 @@ final class ETAAccuracy {
     }
 
     private(set) var trips: [Trip] = []
-    @ObservationIgnored private var samples: [(at: Date, feed: Date, maps: Date)] = []
+    @ObservationIgnored private var samples: [(at: Date, feed: Date, maps: Date, driveArrival: Date, stopsBetween: Int)] = []
     @ObservationIgnored private var key: String?
     @ObservationIgnored private var route = ""
 
@@ -92,7 +104,8 @@ final class ETAAccuracy {
         }
     }
 
-    func observe(bus: TransitKey, stop: TransitKey, route: String, feed: Date?, maps: Date?, now: Date) {
+    func observe(bus: TransitKey, stop: TransitKey, route: String, feed: Date?,
+                 maps: (arrival: Date, driveArrival: Date, stopsBetween: Int)?, now: Date) {
         guard let feed, let maps else { return }
         let key = "\(bus)>\(stop)"
         if key != self.key {
@@ -102,7 +115,7 @@ final class ETAAccuracy {
             samples = []
         }
         if let last = samples.last, now.timeIntervalSince(last.at) < 50 { return }
-        samples.append((now, feed, maps))
+        samples.append((now, feed, maps.arrival, maps.driveArrival, maps.stopsBetween))
     }
 
     /// The tracked bus just left your stop.
@@ -117,6 +130,9 @@ final class ETAAccuracy {
                         feedError: judged.map { abs($0.feed.timeIntervalSince(time)) }.reduce(0, +) / count,
                         mapsError: judged.map { abs($0.maps.timeIntervalSince(time)) }.reduce(0, +) / count)
         trips = Array((trips + [trip]).suffix(30))
+        // What each stop on the way really cost, beyond driving time.
+        let perStop = judged.filter { $0.stopsBetween > 0 }.map { time.timeIntervalSince($0.driveArrival) / Double($0.stopsBetween) }
+        if !perStop.isEmpty { MapsETA.shared.learn(secondsPerStop: perStop.reduce(0, +) / Double(perStop.count)) }
         if let data = try? JSONEncoder().encode(trips) { UserDefaults.standard.set(data, forKey: Self.storageKey) }
     }
 
@@ -127,6 +143,7 @@ final class ETAAccuracy {
         let feed = trips.map(\.feedError).reduce(0, +) / count / 60
         let maps = trips.map(\.mapsError).reduce(0, +) / count / 60
         let label = trips.count == 1 ? "Last trip" : "Last \(trips.count) trips"
-        return "\(label): Apple Maps was off by \(String(format: "%.1f", maps)) min on average, the feed by \(String(format: "%.1f", feed)) min."
+        return "\(label): Apple Maps was off by \(String(format: "%.1f", maps)) min on average, the feed by \(String(format: "%.1f", feed)) min. "
+            + "Maps now allows \(Int(MapsETA.shared.secondsPerStop)) s per stop on the way, learned from your trips."
     }
 }

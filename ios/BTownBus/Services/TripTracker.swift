@@ -204,9 +204,10 @@ final class TripTracker {
                 let path = visits[...end].compactMap { stopsById[$0] }
                 if path.count == end + 1 { MapsETA.shared.refreshIfDue(bus: vehicle, path: path) }
             }
-            mapsArrival = MapsETA.shared.arrival(bus: vehicle.id, stop: watch.stopKey)
+            let maps = MapsETA.shared.estimate(bus: vehicle.id, stop: watch.stopKey)
+            mapsArrival = maps?.arrival
             ETAAccuracy.shared.observe(bus: vehicle.id, stop: watch.stopKey, route: watch.routeId,
-                                       feed: arrival?.predictedArrival, maps: mapsArrival, now: now)
+                                       feed: arrival?.predictedArrival, maps: maps, now: now)
             // It just left your stop: score both guesses.
             if vehicle.lastStopId == watch.stopId || departed { ETAAccuracy.shared.busPassed(at: now) }
         }
