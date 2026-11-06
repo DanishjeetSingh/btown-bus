@@ -77,9 +77,10 @@ struct StopDetailView: View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 8) {
                 let members = store.members(of: stop)
+                let agencies = store.agencies(at: stop)
                 HStack(spacing: 6) {
-                    AgencyMarks(agencies: members.map(\.agency))
-                    Text(members.count > 1 ? "IU + BLOOMINGTON TRANSIT STOP" : "\(stop.agency.name.uppercased()) STOP").font(.system(size: 11.5, weight: .black)).tracking(0.8)
+                    AgencyMarks(agencies: agencies)
+                    Text(agencies.count > 1 ? "IU + BLOOMINGTON TRANSIT STOP" : "\(stop.agency.name.uppercased()) STOP").font(.system(size: 11.5, weight: .black)).tracking(0.8)
                 }
                 .foregroundStyle(Theme.muted)
                 Text(store.placeName(stop)).font(Theme.display(30)).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)

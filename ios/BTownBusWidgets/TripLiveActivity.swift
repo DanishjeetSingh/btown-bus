@@ -21,24 +21,18 @@ struct TripLiveActivity: Widget {
             let state = context.state
             let route = context.attributes
             return DynamicIsland {
+                // Left: which bus and how many stops away. Right: the time.
                 DynamicIslandExpandedRegion(.leading) {
-                    RouteBadge(name: route.routeShortName, hex: route.routeColorHex, size: 44)
-                        .padding(.leading, 4)
+                    HStack(spacing: 8) {
+                        RouteBadge(name: route.routeShortName, hex: route.routeColorHex, size: 40)
+                        StopsCount(state: state, size: 24)
+                    }
+                    .padding(.leading, 4)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    // Stops away is what the bus is really doing; the feed's minutes drift, so they come second.
-                    VStack(alignment: .trailing, spacing: 1) {
-                        StopsAwayText(state: state, size: 26)
-                        if state.stopsAway != nil, state.phase != .departed {
-                            HStack(spacing: 2) {
-                                Text("≈")
-                                BusCountdown(state: state, size: 13)
-                            }
-                            .font(.system(size: 13, weight: .heavy)).foregroundStyle(Color.busCream.opacity(0.7))
-                        }
-                    }
-                    .frame(minWidth: 78, alignment: .trailing)
-                    .padding(.trailing, 4)
+                    BusCountdown(state: state, size: 26)
+                        .frame(minWidth: 78, alignment: .trailing)
+                        .padding(.trailing, 4)
                 }
                 DynamicIslandExpandedRegion(.center) {
                     VStack(alignment: .leading, spacing: 2) {
@@ -60,10 +54,13 @@ struct TripLiveActivity: Widget {
                     .padding(.horizontal, 4)
                 }
             } compactLeading: {
-                RouteBadge(name: route.routeShortName, hex: route.routeColorHex, size: 24)
+                HStack(spacing: 5) {
+                    RouteBadge(name: route.routeShortName, hex: route.routeColorHex, size: 24)
+                    StopsCount(state: state, size: 15)
+                }
             } compactTrailing: {
-                StopsAwayText(state: state, size: 15)
-                    .frame(maxWidth: 60)
+                BusCountdown(state: state, size: 15)
+                    .frame(maxWidth: 56)
             } minimal: {
                 if let stops = state.stopsAway, state.phase != .departed, state.phase != .arriving {
                     Text("\(stops)").font(.system(size: 15, weight: .black).width(.expanded)).foregroundStyle(Color.busYellow)
@@ -193,27 +190,24 @@ struct BusCountdown: View {
     }
 }
 
-/// "3 stops", "Next stop", or the countdown when the bus's position can't be counted.
-struct StopsAwayText: View {
+/// Stops away as a number with a tiny label under it, so it fits next to the route badge.
+/// Empty when the bus's position can't be counted, or once it's arriving or gone.
+struct StopsCount: View {
     let state: TripActivityAttributes.ContentState
     let size: CGFloat
 
     var body: some View {
-        if state.phase == .departed || state.phase == .arriving {
-            BusCountdown(state: state, size: size)
-        } else if let stops = state.stopsAway {
-            Group {
-                if stops <= 1 {
-                    Text("Next")
-                } else {
-                    Text("\(stops)") + Text(" stops").font(.system(size: size * 0.55, weight: .heavy))
-                }
+        if let stops = state.stopsAway, state.phase != .departed, state.phase != .arriving {
+            VStack(spacing: -size * 0.12) {
+                Text(stops <= 1 ? "1" : "\(stops)")
+                    .font(.system(size: size, weight: .black).width(.expanded))
+                    .monospacedDigit()
+                Text(stops <= 1 ? "STOP" : "STOPS")
+                    .font(.system(size: max(7, size * 0.42), weight: .black))
+                    .tracking(0.3)
             }
-            .font(.system(size: size, weight: .black).width(.expanded))
             .foregroundStyle(Color.busYellow)
-            .lineLimit(1).minimumScaleFactor(0.6)
-        } else {
-            BusCountdown(state: state, size: size)
+            .lineLimit(1).fixedSize()
         }
     }
 }

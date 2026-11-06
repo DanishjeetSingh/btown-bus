@@ -99,6 +99,11 @@ final class AppStore {
         guard let group = groupByKey[stop.id] else { return [stop] }
         return [stop] + group.filter { $0.id != stop.id }
     }
+    /// The agencies serving the stop, once each, IU first.
+    func agencies(at stop: TransitStop) -> [Agency] {
+        let present = Set(members(of: stop).map(\.agency))
+        return [Agency.iu, .bt].filter { present.contains($0) }
+    }
     /// The one stop that stands for its group, for a single map pin.
     func representative(of stop: TransitStop) -> TransitStop { groupByKey[stop.id]?.first ?? stop }
     /// IU's names are the short campus ones ("Sample Gates"), so a merged stop goes by those.

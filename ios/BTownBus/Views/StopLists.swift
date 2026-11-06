@@ -1,41 +1,46 @@
 import SwiftUI
 import CoreLocation
+import UniformTypeIdentifiers
 
 struct SavedView: View {
     @Environment(AppStore.self) private var store
     @Environment(LocationService.self) private var location
     @Binding var openStop: TransitStop?
-    @State private var editing = false
+    @AppStorage("saved-sort-closest") private var closestFirst = false
+    @State private var dragging: TransitKey?
 
     var body: some View {
+        let savedStops = ordered(store.savedStops)
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .firstTextBaseline) {
                     Text("Saved stops").font(Theme.display(34)).foregroundStyle(Theme.ink)
                     Spacer()
-                    if store.savedStops.count > 1 {
-                        Button(editing ? "Done" : "Reorder") { withAnimation { editing.toggle() } }
-                            .font(.system(size: 13, weight: .heavy)).foregroundStyle(Theme.muted)
-                    }
+                    if savedStops.count > 1 { sortMenu }
                 }
                 StatusBanners()
-                let savedStops = store.savedStops
                 if savedStops.isEmpty {
                     EmptySaved()
-                } else if editing {
-                    ForEach(Array(savedStops.enumerated()), id: \.element.stop.id) { index, item in
-                        HStack {
-                            Text(store.placeName(item.stop)).font(.system(size: 16, weight: .heavy)).foregroundStyle(Theme.ink)
-                            Spacer()
-                            Button { store.moveFavorites(from: [index], to: max(0, index - 1)) } label: { Image(systemName: "arrow.up") }.disabled(index == 0)
-                            Button { store.moveFavorites(from: [index], to: min(savedStops.count, index + 2)) } label: { Image(systemName: "arrow.down") }.disabled(index == savedStops.count - 1)
-                        }
-                        .font(.system(size: 16, weight: .black)).foregroundStyle(Theme.ink)
-                        .padding(14).chunky(radius: 18, lift: 2)
-                    }
                 } else {
                     ForEach(savedStops, id: \.stop.id) { item in
-                        StopCard(stop: item.stop, distance: location.distance(to: item.stop), only: item.saved.routes) { openStop = item.stop }
+                        let card = StopCard(stop: item.stop, distance: location.distance(to: item.stop), only: item.saved.routes) { openStop = item.stop }
+                        if closestFirst {
+                            card
+                        } else {
+                            // Hold a card and drag it to move it.
+                            card
+                                .contentShape(.dragPreview, RoundedRectangle(cornerRadius: 22, style: .continuous))
+                                .onDrag {
+                                    dragging = item.saved.stop
+                                    return NSItemProvider(object: item.saved.stop.description as NSString)
+                                }
+                                .onDrop(of: [.text], delegate: SavedReorder(target: item.saved.stop, dragging: $dragging, store: store))
+                        }
+                    }
+                    if savedStops.count > 1 {
+                        Text(closestFirst ? "Sorted by distance from you." : "Hold a stop and drag to reorder.")
+                            .font(.system(size: 12.5, weight: .semibold)).foregroundStyle(Theme.muted)
+                            .frame(maxWidth: .infinity)
                     }
                 }
                 FinePrint()
@@ -43,6 +48,51 @@ struct SavedView: View {
             .padding(.horizontal, 14).padding(.top, 14).padding(.bottom, 24)
         }
         .refreshable { await store.refreshNow() }
+    }
+
+    private func ordered(_ items: [(saved: SavedStop, stop: TransitStop)]) -> [(saved: SavedStop, stop: TransitStop)] {
+        guard closestFirst, let here = location.location else { return items }
+        return items.sorted { here.distance(from: $0.stop.location) < here.distance(from: $1.stop.location) }
+    }
+
+    private var sortMenu: some View {
+        Menu {
+            Picker("Order", selection: $closestFirst) {
+                Label("My order", systemImage: "hand.draw").tag(false)
+                Label("Closest first", systemImage: "location").tag(true)
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: closestFirst ? "location.fill" : "arrow.up.arrow.down").font(.system(size: 11, weight: .black))
+                Text(closestFirst ? "Closest" : "My order").font(.system(size: 13, weight: .heavy))
+            }
+            .foregroundStyle(Theme.ink)
+            .padding(.horizontal, 11).frame(height: 32)
+            .overlay(Capsule().strokeBorder(Theme.edge, lineWidth: 2))
+        }
+    }
+}
+
+/// Moves the dragged saved stop into place as it passes over the others.
+private struct SavedReorder: DropDelegate {
+    let target: TransitKey
+    @Binding var dragging: TransitKey?
+    let store: AppStore
+
+    func dropEntered(info: DropInfo) {
+        guard let dragging, dragging != target,
+              let from = store.saved.firstIndex(where: { $0.stop == dragging }),
+              let to = store.saved.firstIndex(where: { $0.stop == target }) else { return }
+        withAnimation(.spring(duration: 0.25)) {
+            store.moveFavorites(from: IndexSet(integer: from), to: to > from ? to + 1 : to)
+        }
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? { DropProposal(operation: .move) }
+
+    func performDrop(info: DropInfo) -> Bool {
+        dragging = nil
+        return true
     }
 }
 
@@ -119,7 +169,7 @@ struct StopCard: View {
     var body: some View {
         let all = store.arrivals(atPlace: stop)
         let arrivals = Array((only.isEmpty ? all : all.filter { only.contains($0.routeKey) }).prefix(4))
-        let agencies = store.members(of: stop).map(\.agency)
+        let agencies = store.agencies(at: stop)
         let here = location.isAtStop(stop)
         ZStack(alignment: .topTrailing) {
             Button(action: open) {
