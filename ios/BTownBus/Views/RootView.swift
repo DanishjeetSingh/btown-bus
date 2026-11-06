@@ -103,34 +103,22 @@ extension View {
     }
 }
 
-/// GPS status that doubles as the refresh button: tap it to fetch new times and a new position.
-/// A blinking blue dot means a fresh position; a hollow ring means it's old or missing,
+/// GPS status. A dot with a slow ripple means a fresh position; a hollow ring means it's old or missing,
 /// so the state doesn't depend on telling colors apart.
 struct LocationPill: View {
-    @Environment(AppStore.self) private var store
     @Environment(LocationService.self) private var location
-    @State private var refreshing = false
-    @State private var spins = 0
 
     var body: some View {
         if location.isAuthorized {
-            Button { refresh() } label: {
-                HStack(spacing: 7) {
-                    dot
-                    Text("GPS").font(.system(size: 13, weight: .black)).tracking(0.8)
-                    Image(systemName: "arrow.clockwise").font(.system(size: 13, weight: .black))
-                        .rotationEffect(.degrees(Double(spins) * 360))
-                        .animation(.easeInOut(duration: 0.7), value: spins)
-                }
-                .foregroundStyle(Color.busInk)
-                .padding(.horizontal, 13).frame(height: 40)
-                .overlay(Capsule().strokeBorder(Color.busInk, lineWidth: 2.5))
-                .contentShape(Capsule())
+            HStack(spacing: 7) {
+                dot
+                Text("GPS").font(.system(size: 13, weight: .black)).tracking(0.8)
             }
-            .buttonStyle(PressStyle())
-            .disabled(refreshing)
-            .sensoryFeedback(.impact, trigger: spins)
-            .accessibilityLabel(location.freshLocation != nil ? "GPS live. Refresh" : "GPS position is old. Refresh")
+            .foregroundStyle(Color.busInk)
+            .padding(.horizontal, 14).frame(height: 40)
+            .overlay(Capsule().strokeBorder(Color.busInk, lineWidth: 2.5))
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(location.freshLocation != nil ? "GPS live" : "GPS position is old")
         } else {
             Button {
                 if location.isDenied { UIApplication.shared.open(URL(string: UIApplication.openSettingsURLString)!) }
@@ -178,15 +166,5 @@ struct LocationPill: View {
     private struct Ripple {
         var scale = 1.0
         var opacity = 0.5
-    }
-
-    private func refresh() {
-        spins += 1
-        refreshing = true
-        location.requestFreshFix()
-        Task {
-            await store.refreshNow()
-            refreshing = false
-        }
     }
 }

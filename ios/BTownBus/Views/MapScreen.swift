@@ -236,39 +236,75 @@ private struct LiveBuses: View {
     let shown: Set<TransitKey>
     @Binding var expanded: Bool
     let show: ([TransitVehicle]) -> Void
+    @State private var refreshing = false
+    @State private var spins = 0
 
     var body: some View {
-        let allDown = store.failedAgencies.count == Agency.allCases.count
-        VStack(alignment: .leading, spacing: 0) {
-            Button { withAnimation(.spring(duration: 0.35, bounce: 0.1)) { expanded.toggle() } } label: {
-                HStack(spacing: 7) {
-                    if allDown {
-                        Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 11, weight: .black)).foregroundStyle(Theme.warn)
-                    } else {
-                        Circle().fill(Theme.me).frame(width: 9, height: 9)
-                    }
-                    Text(buses.isEmpty ? (shown.isEmpty ? "Pick routes to see buses" : "No buses running") : "\(buses.count) \(buses.count == 1 ? "bus" : "buses") live")
-                        .font(.system(size: 13, weight: .heavy)).foregroundStyle(Theme.ink)
-                    if !shown.isEmpty {
-                        Image(systemName: "chevron.down").font(.system(size: 10, weight: .black)).foregroundStyle(Theme.muted)
-                            .rotationEffect(.degrees(expanded ? 180 : 0))
-                    }
+        // Re-checked every 10 s: times going old doesn't redraw anything by itself.
+        TimelineView(.periodic(from: .now, by: 10)) { context in
+            let trouble = store.hasTrouble(at: context.date)
+            VStack(alignment: .leading, spacing: 0) {
+                if trouble && !expanded { troubleButton } else { header }
+                if expanded {
+                    breakdown
+                        // Fades in just behind the window opening, which reveals it from the top.
+                        .transition(.asymmetric(insertion: .opacity.animation(.easeOut(duration: 0.2).delay(0.1)),
+                                                removal: .opacity.animation(.easeIn(duration: 0.1))))
                 }
-                .padding(.horizontal, 13).frame(height: 36)
             }
-            .buttonStyle(.plain)
-            .disabled(shown.isEmpty)
-            if expanded {
-                breakdown
-                    // Fades in just behind the window opening, which reveals it from the top.
-                    .transition(.asymmetric(insertion: .opacity.animation(.easeOut(duration: 0.2).delay(0.1)),
-                                            removal: .opacity.animation(.easeIn(duration: 0.1))))
-            }
+            // As wide as its contents, and clipped, so rows never spill past the window while it grows.
+            .fixedSize()
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .chunky(fill: trouble && !expanded ? .busYellow : Theme.surface, radius: 18, lift: 2)
         }
-        // As wide as its contents, and clipped, so rows never spill past the window while it grows.
-        .fixedSize()
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .chunky(radius: 18, lift: 2)
+    }
+
+    private var header: some View {
+        Button { withAnimation(.spring(duration: 0.35, bounce: 0.1)) { expanded.toggle() } } label: {
+            HStack(spacing: 7) {
+                Circle().fill(Theme.me).frame(width: 9, height: 9)
+                Text(buses.isEmpty ? (shown.isEmpty ? "Pick routes to see buses" : "No buses running") : "\(buses.count) \(buses.count == 1 ? "bus" : "buses") live")
+                    .font(.system(size: 13, weight: .heavy)).foregroundStyle(Theme.ink)
+                if !shown.isEmpty {
+                    Image(systemName: "chevron.down").font(.system(size: 10, weight: .black)).foregroundStyle(Theme.muted)
+                        .rotationEffect(.degrees(expanded ? 180 : 0))
+                }
+            }
+            .padding(.horizontal, 13).frame(height: 36)
+        }
+        .buttonStyle(.plain)
+        .disabled(shown.isEmpty)
+    }
+
+    /// When a feed is failing or times have stopped updating, the pill itself becomes the refresh button.
+    private var troubleButton: some View {
+        let failed = store.failedAgencies
+        let label = failed.isEmpty || failed.count == Agency.allCases.count
+            ? "Times may be old"
+            : "\(failed.map(\.shortName).sorted().joined(separator: " & ")) not loading"
+        return Button { refresh() } label: {
+            HStack(spacing: 7) {
+                Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 11, weight: .black))
+                Text(label).font(.system(size: 13, weight: .heavy))
+                Image(systemName: "arrow.clockwise").font(.system(size: 12, weight: .black))
+                    .rotationEffect(.degrees(Double(spins) * 360))
+                    .animation(.easeInOut(duration: 0.7), value: spins)
+            }
+            .foregroundStyle(Color.busInk)
+            .padding(.horizontal, 13).frame(height: 36)
+        }
+        .buttonStyle(.plain)
+        .disabled(refreshing)
+        .accessibilityLabel("\(label). Refresh")
+    }
+
+    private func refresh() {
+        spins += 1
+        refreshing = true
+        Task {
+            await store.refreshNow()
+            refreshing = false
+        }
     }
 
     private var breakdown: some View {
@@ -307,6 +343,25 @@ private struct LiveBuses: View {
             if routes.count > limit {
                 Text("+\(routes.count - limit) more routes").font(.system(size: 11.5, weight: .semibold)).foregroundStyle(Theme.muted)
             }
+            // Refresh lives here by default; it's only needed up front when something's wrong.
+            HStack(spacing: 10) {
+                if let updated = store.lastUpdated {
+                    (Text("Updated ") + Text(updated, style: .relative) + Text(" ago"))
+                        .font(.system(size: 11.5, weight: .semibold)).foregroundStyle(Theme.muted)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                Button { refresh() } label: {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                        .font(.system(size: 12.5, weight: .black)).foregroundStyle(Theme.ink)
+                        .padding(.horizontal, 10).frame(height: 30)
+                        .chunky(fill: Theme.soft, radius: 10, lift: 2)
+                }
+                .buttonStyle(PressStyle())
+                .disabled(refreshing)
+                .sensoryFeedback(.impact, trigger: spins)
+            }
+            .padding(.top, 4)
         }
         .padding(.horizontal, 13).padding(.bottom, 12)
     }

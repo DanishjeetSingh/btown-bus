@@ -242,16 +242,33 @@ struct StarButton: View {
     }
 }
 
+/// Shown when a feed is down or times have stopped updating, with a tap to try again.
 struct StatusBanners: View {
     @Environment(AppStore.self) private var store
+    @State private var refreshing = false
 
     var body: some View {
-        if store.loaded, !store.failedAgencies.isEmpty {
-            let names = store.failedAgencies.map(\.shortName).sorted().joined(separator: " & ")
-            Text(store.failedAgencies.count == Agency.allCases.count ? "Live feeds are down right now. Retrying automatically." : "\(names) feed is down. Other times are live.")
-                .font(.system(size: 14, weight: .bold)).foregroundStyle(.white)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(12).chunky(fill: Theme.warn, radius: 16, lift: 0)
+        // hasTrouble reads the last update time, which every poll sets, so this re-checks itself.
+        // (No TimelineView: inside the Saved list it would leave an empty row.)
+        if store.loaded, store.hasTrouble() {
+                let failed = store.failedAgencies
+                let names = failed.map(\.shortName).sorted().joined(separator: " & ")
+                let message = failed.isEmpty ? "Times haven't updated in a while."
+                    : failed.count == Agency.allCases.count ? "Live feeds aren't answering." : "\(names) feed isn't answering. Other times are live."
+                Button {
+                    refreshing = true
+                    Task { await store.refreshNow(); refreshing = false }
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                        Text(message).frame(maxWidth: .infinity, alignment: .leading)
+                        if refreshing { ProgressView().tint(.white) } else { Label("Retry", systemImage: "arrow.clockwise").font(.system(size: 13, weight: .black)) }
+                    }
+                    .font(.system(size: 14, weight: .bold)).foregroundStyle(.white)
+                    .padding(12).chunky(fill: Theme.warn, radius: 16, lift: 0)
+                }
+                .buttonStyle(PressStyle())
+                .disabled(refreshing)
         }
     }
 }

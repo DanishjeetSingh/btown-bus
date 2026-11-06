@@ -22,6 +22,8 @@ final class AppStore {
     private(set) var arrivals: [TransitArrival] = []
     private(set) var failedAgencies: Set<Agency> = []
     private(set) var loaded = false
+    /// When the live feeds last answered.
+    private(set) var lastUpdated: Date?
     private(set) var arrivalsLoadedFor: Set<TransitKey> = []
 
     private(set) var saved: [SavedStop] {
@@ -51,6 +53,7 @@ final class AppStore {
     private(set) var groupByKey: [TransitKey: [TransitStop]] = [:]
     @ObservationIgnored private var pollTask: Task<Void, Never>?
     @ObservationIgnored private var lastWidgetNudge = Date.distantPast
+    @ObservationIgnored private var pollingSince = Date()
     @ObservationIgnored private var nearbyCache: (origin: CLLocation, routes: Set<TransitKey>, limit: Int, result: [(stop: TransitStop, distance: CLLocationDistance)])?
 
     init() {
@@ -253,8 +256,19 @@ final class AppStore {
 
     // MARK: Polling
 
+    /// Times haven't updated for a minute, though the app has been polling for a while
+    /// (so coming back from the background doesn't count until the first poll has had a chance).
+    func timesAreOld(at now: Date = .now) -> Bool {
+        guard let lastUpdated, now.timeIntervalSince(pollingSince) > 20 else { return false }
+        return now.timeIntervalSince(lastUpdated) > 60
+    }
+
+    /// A feed is failing or times have stopped updating: worth offering a refresh.
+    func hasTrouble(at now: Date = .now) -> Bool { !failedAgencies.isEmpty || timesAreOld(at: now) }
+
     func startPolling() {
         guard pollTask == nil else { return }
+        pollingSince = Date()
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
@@ -316,6 +330,7 @@ final class AppStore {
             if mergedVehicles != vehicles { vehicles = mergedVehicles }
         }
         if failed != failedAgencies { failedAgencies = failed }
+        if !newRoutes.isEmpty { lastUpdated = Date() }
         if !loaded { loaded = true }
 
         guard includeArrivals else { return }
