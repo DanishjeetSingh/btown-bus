@@ -175,7 +175,8 @@ struct SavedStopsView: View {
                 // and only as many rows as fit are shown.
                 RowsThatFit(spacing: small ? 8 : 7) {
                     ForEach(Array(entry.rows.prefix(10).enumerated()), id: \.offset) { _, row in
-                        rowView(row)
+                        // A stop's first row outranks other stops' extra buses.
+                        rowView(row).layoutValue(key: RowRank.self, value: row.showsName ? 0 : 1)
                     }
                 }
                 .frame(maxHeight: .infinity, alignment: .top)
@@ -313,8 +314,13 @@ struct SavedStopsView: View {
     }
 }
 
+private struct RowRank: LayoutValueKey {
+    static let defaultValue = 0
+}
+
 /// Stacks rows top to bottom and leaves out any that wouldn't fit whole, so a row is never cut in half
-/// and long stop names can wrap instead of shrinking.
+/// and long stop names can wrap instead of shrinking. Every stop gets its first row before any stop
+/// gets a second, so a stop with several saved buses can't push the next stop off the widget.
 private struct RowsThatFit: Layout {
     var spacing: CGFloat
 
@@ -326,17 +332,26 @@ private struct RowsThatFit: Layout {
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let heights = subviews.map { $0.sizeThatFits(ProposedViewSize(width: bounds.width, height: nil)).height }
+        var used: CGFloat = 0
+        var shown = Set<Int>()
+        for rank in [0, 1] {
+            for index in subviews.indices where subviews[index][RowRank.self] == rank {
+                let needed = heights[index] + (shown.isEmpty ? 0 : spacing)
+                guard used + needed <= bounds.height + 0.5 else { if rank == 0 { break } else { continue } }
+                used += needed
+                shown.insert(index)
+            }
+        }
         var y = bounds.minY
-        var full = false
-        for view in subviews {
-            let height = view.sizeThatFits(ProposedViewSize(width: bounds.width, height: nil)).height
-            if !full, y + height <= bounds.maxY + 0.5 {
-                view.place(at: CGPoint(x: bounds.minX, y: y), proposal: ProposedViewSize(width: bounds.width, height: height))
-                y += height + spacing
+        for index in subviews.indices {
+            let size = ProposedViewSize(width: bounds.width, height: heights[index])
+            if shown.contains(index) {
+                subviews[index].place(at: CGPoint(x: bounds.minX, y: y), proposal: size)
+                y += heights[index] + spacing
             } else {
-                // Out of room: park the rest out of sight.
-                full = true
-                view.place(at: CGPoint(x: bounds.minX, y: bounds.maxY + 2000), proposal: ProposedViewSize(width: bounds.width, height: height))
+                // Out of room: park it out of sight.
+                subviews[index].place(at: CGPoint(x: bounds.minX, y: bounds.maxY + 2000), proposal: size)
             }
         }
     }

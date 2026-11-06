@@ -23,20 +23,15 @@ struct StopDetailView: View {
                 header
                 HStack(spacing: 8) {
                     FavoriteToggle(stop: stop, filter: filter) { saving = $0 }
-                    Button { showWalking = true } label: {
-                        Label(here ? "Map" : "Walk here", systemImage: here ? "map" : "figure.walk")
-                            .font(.system(size: 15, weight: .black)).foregroundStyle(Theme.ink)
-                            .frame(maxWidth: .infinity).frame(height: 46)
-                            .chunky(fill: Theme.soft, radius: 15, lift: 2)
-                    }
-                    .buttonStyle(PressStyle())
+                    walkButton(here: here, walk: walk)
                 }
-                BusFilter(routes: store.routes(at: stop), filter: $filter, savedRoutes: Set(store.savedEntry(for: stop)?.routes ?? []))
-                walkStrip(here: here, walk: walk)
+                if !location.isAuthorized { locationPrompt }
                 if let first = arrivals.first, let plan = TripMath.leavePlan(busArrival: first.predictedArrival, walkSeconds: walk, atStop: here) {
                     LeaveCard(arrival: first, route: store.route(first.routeKey), plan: plan)
                 }
-                Text("ARRIVING").font(.system(size: 12, weight: .black)).tracking(1).foregroundStyle(Theme.muted).padding(.top, 4)
+                // The filter sits right above what it filters.
+                ArrivingFilter(routes: store.routes(at: stop), filter: $filter, savedRoutes: Set(store.savedEntry(for: stop)?.routes ?? []))
+                    .padding(.top, 4)
                 if arrivals.isEmpty {
                     Text(!store.loadedArrivals(atPlace: stop) ? "Checking arrival times…"
                          : filter.isEmpty ? "No buses predicted for this stop right now." : "None of these buses are due right now.")
@@ -93,31 +88,36 @@ struct StopDetailView: View {
         }
     }
 
-    @ViewBuilder private func walkStrip(here: Bool, walk: Int?) -> some View {
-        if here {
-            HStack(spacing: 10) {
-                Circle().fill(Theme.goInk).frame(width: 12, height: 12)
-                Text("You're at this stop").font(.system(size: 16, weight: .heavy))
+    /// Walk time rides on the button, like the saved buses ride on Save.
+    private func walkButton(here: Bool, walk: Int?) -> some View {
+        let detail: String? = here ? "You're here"
+            : walk.map { seconds in
+                let minutes = "\(max(1, Int((Double(seconds) / 60).rounded()))) min"
+                return location.distance(to: stop).map { "\(minutes) · \(formatDistance($0))" } ?? minutes
             }
-            .foregroundStyle(Theme.goInk)
-            .frame(maxWidth: .infinity, alignment: .leading).padding(14)
-            .background(Theme.go, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-        } else if let walk, let distance = location.distance(to: stop) {
-            HStack(spacing: 8) {
-                Image(systemName: "figure.walk")
-                Text("\(max(1, Int((Double(walk) / 60).rounded()))) min walk").font(.system(size: 16, weight: .heavy))
-                Text("· \(formatDistance(distance))").foregroundStyle(Theme.muted).font(.system(size: 15, weight: .semibold))
+        return Button { showWalking = true } label: {
+            HStack(spacing: 7) {
+                Image(systemName: here ? "map" : "figure.walk")
+                VStack(alignment: .leading, spacing: -1) {
+                    Text(here ? "Map" : "Walk here")
+                    if let detail { Text(detail).font(.system(size: 11.5, weight: .heavy)).opacity(0.75) }
+                }
             }
-            .foregroundStyle(Theme.ink)
-            .frame(maxWidth: .infinity, alignment: .leading).padding(14)
-            .background(Theme.soft, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-        } else {
-            Button { location.requestPermission() } label: {
-                Label("Turn on location for walk times", systemImage: "location.fill")
-                    .font(.system(size: 15, weight: .heavy)).foregroundStyle(.white)
-                    .frame(maxWidth: .infinity, alignment: .leading).padding(14)
-                    .background(Theme.me, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-            }
+            .font(.system(size: 15, weight: .black)).lineLimit(1)
+            .foregroundStyle(here ? Theme.goInk : Theme.ink)
+            .padding(.horizontal, 8)
+            .frame(maxWidth: .infinity).frame(height: 46)
+            .chunky(fill: here ? Theme.go : Theme.soft, radius: 15, lift: 2)
+        }
+        .buttonStyle(PressStyle())
+    }
+
+    private var locationPrompt: some View {
+        Button { location.requestPermission() } label: {
+            Label("Turn on location for walk times", systemImage: "location.fill")
+                .font(.system(size: 15, weight: .heavy)).foregroundStyle(.white)
+                .frame(maxWidth: .infinity, alignment: .leading).padding(14)
+                .background(Theme.me, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
         }
     }
 }
@@ -167,39 +167,45 @@ struct FavoriteToggle: View {
     }
 }
 
-/// The stop's buses as one swipeable row of chips that narrow the list below. Only changes what you're
-/// looking at, not what's saved. At a stop saved for some buses, "Mine" jumps to just those, and they wear a star.
-struct BusFilter: View {
+/// The ARRIVING header with the stop's buses as chips that narrow the list below it, for this visit only
+/// (saving is separate). Chips wrap rather than scroll, so nothing is ever cut off. Unpicked chips fade
+/// and get a dashed outline, so the state doesn't rely on color. Saved buses carry a star, and "Mine"
+/// picks exactly those when more than one is saved.
+struct ArrivingFilter: View {
     let routes: [TransitRoute]
     @Binding var filter: Set<TransitKey>
     var savedRoutes: Set<TransitKey> = []
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 9) {
             HStack {
-                Text("BUSES HERE").font(.system(size: 11.5, weight: .black)).tracking(1).foregroundStyle(Theme.muted)
-                Text(filter.isEmpty ? "· tap to filter" : "· \(filter.count) of \(routes.count)")
-                    .font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.muted)
+                Text("ARRIVING").font(.system(size: 12, weight: .black)).tracking(1).foregroundStyle(Theme.muted)
                 Spacer()
                 if !filter.isEmpty {
-                    Button("Show all") { withAnimation(.spring(duration: 0.25)) { filter = [] } }
+                    Button("Show all \(routes.count)") { withAnimation(.spring(duration: 0.25)) { filter = [] } }
                         .font(.system(size: 13, weight: .heavy)).foregroundStyle(Theme.ink)
                 }
             }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 7) {
-                    if !savedRoutes.isEmpty {
+            if routes.count > 1 {
+                FlowRow(spacing: 6) {
+                    if savedRoutes.count >= 2 {
                         let on = filter == savedRoutes
                         Button { withAnimation(.spring(duration: 0.25)) { filter = on ? [] : savedRoutes } } label: {
-                            Label("Mine", systemImage: "star.fill")
-                                .font(.system(size: 14, weight: .black))
-                                .foregroundStyle(on ? Color.busInk : Theme.ink)
-                                .padding(.horizontal, 11).frame(height: 34)
-                                .background(on ? Color.busYellow : Theme.surface, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-                                .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).strokeBorder(Theme.edge, lineWidth: 2))
+                            HStack(spacing: 3) {
+                                Image(systemName: "star.fill").font(.system(size: 10, weight: .black))
+                                Text("Mine").font(Theme.display(14))
+                            }
+                            .foregroundStyle(Color.busInk)
+                            .padding(.horizontal, 9).frame(minWidth: 40).frame(height: 32)
+                            .background(Color.busYellow, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .strokeBorder(Theme.edge, style: StrokeStyle(lineWidth: 2, dash: !filter.isEmpty && !on ? [4, 3] : [])))
+                            .opacity(!filter.isEmpty && !on ? 0.5 : 1)
                         }
                         .buttonStyle(PressStyle())
                         .sensoryFeedback(.selection, trigger: on)
+                        .accessibilityLabel("My saved buses")
+                        .accessibilityAddTraits(on ? .isSelected : [])
                     }
                     ForEach(routes) { route in
                         let on = filter.contains(route.id)
@@ -210,14 +216,12 @@ struct BusFilter: View {
                         }
                         .buttonStyle(PressStyle())
                         .sensoryFeedback(.selection, trigger: on)
+                        .accessibilityLabel("\(route.longName)\(savedRoutes.contains(route.id) ? ", saved" : "")")
+                        .accessibilityAddTraits(on ? .isSelected : [])
                     }
                 }
-                .padding(.vertical, 4)
             }
-            .scrollClipDisabled()
         }
-        .padding(.horizontal, 14).padding(.vertical, 10)
-        .background(Theme.soft, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }
 
@@ -228,20 +232,16 @@ struct RouteChip: View {
     var saved = false
 
     var body: some View {
-        Text(route.shortName).font(Theme.display(15))
-            .foregroundStyle(dimmed ? Theme.muted : Color.readableInk(on: route.colorHex))
-            .padding(.horizontal, 11).frame(minWidth: 44).frame(height: 34)
-            .background(dimmed ? Theme.soft : Color(hex: route.colorHex), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).strokeBorder(dimmed ? Theme.muted : Theme.edge, lineWidth: 2))
-            .overlay(alignment: .topTrailing) {
-                if saved {
-                    Image(systemName: "star.fill").font(.system(size: 8, weight: .black)).foregroundStyle(Color.busInk)
-                        .frame(width: 15, height: 15)
-                        .background(Color.busYellow, in: Circle())
-                        .overlay(Circle().strokeBorder(Theme.edge, lineWidth: 1.5))
-                        .offset(x: 6, y: -6)
-                }
-            }
+        HStack(spacing: 3) {
+            if saved { Image(systemName: "star.fill").font(.system(size: 10, weight: .black)) }
+            Text(route.shortName).font(Theme.display(14))
+        }
+        .foregroundStyle(Color.readableInk(on: route.colorHex))
+        .padding(.horizontal, 9).frame(minWidth: 40).frame(height: 32)
+        .background(Color(hex: route.colorHex), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .strokeBorder(dimmed ? Theme.muted : Theme.edge, style: StrokeStyle(lineWidth: 2, dash: dimmed ? [4, 3] : [])))
+        .opacity(dimmed ? 0.45 : 1)
     }
 }
 
