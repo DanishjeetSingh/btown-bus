@@ -298,6 +298,14 @@ private struct LiveBuses: View {
         .accessibilityLabel("\(label). Refresh")
     }
 
+    /// "Updated just now", "Updated 3 min ago". The feeds are polled every 15 s, so it's usually "just now".
+    static func updatedPhrase(_ date: Date, now: Date = .now) -> String {
+        let minutes = Int(now.timeIntervalSince(date) / 60)
+        if minutes < 1 { return "Updated just now" }
+        if minutes >= 60 { return "Updated over an hour ago" }
+        return "Updated \(minutes) min ago"
+    }
+
     private func refresh() {
         spins += 1
         refreshing = true
@@ -346,9 +354,13 @@ private struct LiveBuses: View {
             // Refresh lives here by default; it's only needed up front when something's wrong.
             HStack(spacing: 10) {
                 if let updated = store.lastUpdated {
-                    (Text("Updated ") + Text(updated, style: .relative) + Text(" ago"))
-                        .font(.system(size: 11.5, weight: .semibold)).foregroundStyle(Theme.muted)
-                        .lineLimit(1)
+                    // Minute-level, and with room kept for the longest wording, so the window never resizes.
+                    ZStack(alignment: .leading) {
+                        Text("Updated 59 min ago").hidden()
+                        Text(Self.updatedPhrase(updated))
+                    }
+                    .font(.system(size: 11.5, weight: .semibold)).monospacedDigit().foregroundStyle(Theme.muted)
+                    .lineLimit(1)
                 }
                 Spacer(minLength: 0)
                 Button { refresh() } label: {
