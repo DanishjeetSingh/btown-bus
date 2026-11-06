@@ -27,6 +27,8 @@ struct TripActivityAttributes: ActivityAttributes {
         var walkSeconds: Int?
         var leaveAt: Date?
         var updatedAt: Date
+        /// Apple Maps' estimate, shown beside the feed's.
+        var mapsArrival: Date? = nil
     }
 
     var routeShortName: String

@@ -108,6 +108,9 @@ struct TripView: View {
         if let trip {
             sectionLabel("YOUR BUS")
             busRow(trip: trip)
+            if let summary = ETAAccuracy.shared.summary {
+                Text(summary).font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.muted)
+            }
             if !atPickup { yellowButton("Start walking", symbol: "location.north.line.fill") { navigating = true } }
             HStack(spacing: 8) {
                 softButton("Steps", symbol: "list.bullet") { showSteps = true }.disabled(guide.steps.isEmpty)
@@ -185,6 +188,11 @@ struct TripView: View {
                 Text(arrival?.destination ?? bus?.direction ?? route?.longName ?? "On the way").font(.system(size: 15, weight: .heavy)).lineLimit(2)
                 Text(away.map { "\($0) \($0 == 1 ? "stop" : "stops") away" } ?? (bus == nil ? "Waiting for the bus's position" : "On the map"))
                     .font(.system(size: 12.5, weight: .semibold)).foregroundStyle(Theme.muted).lineLimit(1)
+                if let maps = tracker.status?.mapsArrival {
+                    // Apple Maps' guess (driving times with traffic), beside the feed's big number.
+                    Label("Apple Maps ≈ \(max(0, Int((maps.timeIntervalSinceNow / 60).rounded(.up)))) min", systemImage: "map.fill")
+                        .font(.system(size: 12.5, weight: .heavy)).foregroundStyle(Theme.ink).lineLimit(1)
+                }
             }
             .foregroundStyle(Theme.ink)
             Spacer(minLength: 4)

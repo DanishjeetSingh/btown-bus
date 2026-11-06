@@ -98,6 +98,11 @@ struct LockScreenTripView: View {
                 VStack(alignment: .trailing, spacing: 0) {
                     Text("BUS IN").font(.system(size: 10, weight: .black)).tracking(0.8).foregroundStyle(Color.busCream.opacity(0.6))
                     BusCountdown(state: state, size: 28)
+                    if let maps = state.mapsArrival, state.phase != .departed {
+                        Text("Maps ≈ \(max(0, Int((maps.timeIntervalSinceNow / 60).rounded(.up)))) min")
+                            .font(.system(size: 11, weight: .heavy)).foregroundStyle(Color.busCream.opacity(0.7))
+                            .lineLimit(1)
+                    }
                 }
                 .frame(width: 92, alignment: .trailing)
             }

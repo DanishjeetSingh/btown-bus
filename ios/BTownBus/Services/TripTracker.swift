@@ -26,6 +26,8 @@ struct TripStatus: Equatable {
     /// The bus being followed, for showing it on the map.
     var vehicle: TransitVehicle? = nil
     var stopsAway: Int?
+    /// Apple Maps' estimate of when the bus reaches the stop, as a second opinion on the feed's.
+    var mapsArrival: Date? = nil
     var walkSeconds: Int?
     var leaveAt: Date?
     var atStop: Bool
@@ -193,6 +195,21 @@ final class TripTracker {
         // The followed bus, even when the feed has no time prediction for it right now.
         let vehicle = (arrival?.vehicleId ?? watch.vehicleId).flatMap { id in vehicles.first { $0.vehicleId == id } }
         let stopsAway = vehicle.flatMap { TripMath.stopsAway(route: route, vehicle: $0, target: watch.stopId) }
+
+        // Apple Maps' second opinion, along the stops the bus has left to make. No path, no estimate.
+        var mapsArrival: Date?
+        if let vehicle {
+            if let visits = TripMath.upcomingVisits(route: route, vehicle: vehicle), let end = visits.firstIndex(of: watch.stopId) {
+                let stopsById = Dictionary(base.stops.map { ($0.stopId, $0) }, uniquingKeysWith: { a, _ in a })
+                let path = visits[...end].compactMap { stopsById[$0] }
+                if path.count == end + 1 { MapsETA.shared.refreshIfDue(bus: vehicle, path: path) }
+            }
+            mapsArrival = MapsETA.shared.arrival(bus: vehicle.id, stop: watch.stopKey)
+            ETAAccuracy.shared.observe(bus: vehicle.id, stop: watch.stopKey, route: watch.routeId,
+                                       feed: arrival?.predictedArrival, maps: mapsArrival, now: now)
+            // It just left your stop: score both guesses.
+            if vehicle.lastStopId == watch.stopId || departed { ETAAccuracy.shared.busPassed(at: now) }
+        }
         let location = LocationService.shared
         let atStop = location.isAtStop(stop)
         let walk = location.walkSeconds(to: stop)
@@ -212,7 +229,7 @@ final class TripTracker {
             default: phase = .onTheWay
             }
         }
-        let next = TripStatus(arrival: arrival, vehicle: vehicle, stopsAway: stopsAway, walkSeconds: atStop ? 0 : walk,
+        let next = TripStatus(arrival: arrival, vehicle: vehicle, stopsAway: stopsAway, mapsArrival: mapsArrival, walkSeconds: atStop ? 0 : walk,
                               leaveAt: plan?.state == .atStop ? nil : plan?.leaveAt, atStop: atStop, phase: phase, checkedAt: now)
         let previousPhase = status?.phase
         status = next
@@ -300,7 +317,7 @@ final class TripTracker {
     private func content(for status: TripStatus) -> ActivityContent<TripActivityAttributes.ContentState> {
         let state = TripActivityAttributes.ContentState(
             phase: status.phase, busArrival: status.arrival?.predictedArrival, stopsAway: status.stopsAway,
-            walkSeconds: status.walkSeconds, leaveAt: status.leaveAt, updatedAt: status.checkedAt)
+            walkSeconds: status.walkSeconds, leaveAt: status.leaveAt, updatedAt: status.checkedAt, mapsArrival: status.mapsArrival)
         // If the app stops updating, iOS dims the activity instead of showing old times as fresh.
         return ActivityContent(state: state, staleDate: status.checkedAt.addingTimeInterval(3 * 60), relevanceScore: 100)
     }
