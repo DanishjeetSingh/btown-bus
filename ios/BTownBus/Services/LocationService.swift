@@ -29,7 +29,9 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
         authorization = manager.authorizationStatus
         manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyNearestTenMeters
-        manager.distanceFilter = 8
+        // Every fix, even standing still; didUpdateLocations thins them out. With a distance filter, iOS
+        // goes quiet when you stop moving and your position ages into "stale" while you wait at a stop.
+        manager.distanceFilter = kCLDistanceFilterNone
         manager.activityType = .fitness
         manager.pausesLocationUpdatesAutomatically = false
     }
@@ -39,20 +41,24 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
     /// Precise Location is off for the app: fixes are only good to about a kilometre.
     var isApproximate: Bool { isAuthorized && manager.accuracyAuthorization == .reducedAccuracy }
 
-    /// Ask for one new fix now, instead of waiting for the next movement-triggered update.
+    /// Get a new fix now. requestLocation() does nothing while updates are already running,
+    /// so restart them instead, which makes iOS deliver a position straight away.
     func requestFreshFix() {
         guard isAuthorized else { return }
+        forceNextFix = true
+        manager.stopUpdatingLocation()
         manager.startUpdatingLocation()
-        manager.requestLocation()
     }
 
-    /// iOS only sends a new position after you move about 8 m, so standing still (at your stop, say)
-    /// lets the last fix age until it counts as stale. Ask for one when it's getting old.
+    /// A backstop for when updates stall (indoors, say): restart them if the last fix is getting old.
     func refreshIfStale() {
         guard isAuthorized else { return }
         if let location, Date().timeIntervalSince(location.timestamp) < 45 { return }
-        manager.requestLocation()
+        requestFreshFix()
     }
+
+    /// Set by requestFreshFix so the next fix is used even if it's close to the last one.
+    @ObservationIgnored private var forceNextFix = false
 
     /// Walking directions need a precise position; ask for it just this once if it's off.
     func requestPreciseForWalking() {
@@ -94,7 +100,6 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
 
     func setWalkingNavigation(_ on: Bool) {
         manager.desiredAccuracy = on ? kCLLocationAccuracyBestForNavigation : kCLLocationAccuracyNearestTenMeters
-        manager.distanceFilter = on ? 2 : 8
         walkingWantsHeading = on
         updateHeading()
     }
@@ -123,9 +128,8 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
     }
 
     func appDidBecomeActive() {
-        startUpdates()
-        // Ask for a fix right away so a stale one from before the app was suspended is replaced quickly.
-        if isAuthorized { manager.requestLocation() }
+        // Restarting delivers a fix right away, so one from before the app was suspended is replaced quickly.
+        requestFreshFix()
     }
 
     func distance(to stop: TransitStop) -> CLLocationDistance? {
@@ -200,6 +204,14 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
             // (with Precise Location off, every fix is rough).
             if latest.horizontalAccuracy >= 200, let current = location, current.horizontalAccuracy < 200,
                latest.timestamp.timeIntervalSince(current.timestamp) < 60 { return }
+            // Fixes arrive about every second. Pass one on when you've moved, it's clearly more accurate,
+            // or the last one is 30 s old, so the app isn't redrawn every second while you stand still.
+            // Walking navigation takes every fix.
+            if !forceNextFix, !walkingWantsHeading, let current = location,
+               latest.distance(from: current) < 5,
+               latest.horizontalAccuracy > current.horizontalAccuracy - 10,
+               latest.timestamp.timeIntervalSince(current.timestamp) < 30 { return }
+            forceNextFix = false
             location = latest
             shareWithWidget(latest)
             // Update navigation and its Live Activity directly, including while locked.

@@ -145,7 +145,12 @@ struct LocationPill: View {
         }
     }
 
-    @ViewBuilder private var dot: some View {
+    /// Re-checked every 15 s, since a position going stale doesn't otherwise redraw anything.
+    private var dot: some View {
+        TimelineView(.periodic(from: .now, by: 15)) { _ in dotShape }
+    }
+
+    @ViewBuilder private var dotShape: some View {
         if location.freshLocation != nil {
             // A steady dot with a faint ring that ripples out every few seconds: alive, but not flashing.
             Circle().fill(Theme.me).frame(width: 11, height: 11)
