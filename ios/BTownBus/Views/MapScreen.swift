@@ -356,7 +356,7 @@ private struct LiveBuses: View {
                 if let updated = store.lastUpdated {
                     // Minute-level, and with room kept for the longest wording, so the window never resizes.
                     ZStack(alignment: .leading) {
-                        Text("Updated 59 min ago").hidden()
+                        Text("Updated over an hour ago").hidden()
                         Text(Self.updatedPhrase(updated))
                     }
                     .font(.system(size: 11.5, weight: .semibold)).monospacedDigit().foregroundStyle(Theme.muted)
