@@ -22,9 +22,9 @@ struct MapScreen: View {
         let shown = shownRoutes
         let favorites = Set(store.saved.flatMap { item in store.stop(item.stop).map { store.members(of: $0).map(\.id) } ?? [item.stop] })
         let candidates = store.stops.filter { stop in favorites.contains(stop.id) || stop.routeIds.contains { shown.contains(TransitKey(agency: stop.agency, id: $0)) } }
-        let candidateKeys = Set(candidates.map(\.id))
-        // A merged IU + BT stop gets one pin (IU's); either opens the combined stop.
-        let stops = candidates.filter { stop in stop.agency == .iu || !(store.partner(of: stop).map { candidateKeys.contains($0.id) } ?? false) }
+        // Merged stops get one pin, which opens the combined stop.
+        var pinned = Set<TransitKey>()
+        let stops = candidates.map { store.representative(of: $0) }.filter { pinned.insert($0.id).inserted }
         let buses = store.vehicles.filter { vehicle in vehicle.routeId.map { shown.contains(TransitKey(agency: vehicle.agency, id: $0)) } ?? false }
         Map(position: $camera, scope: mapScope) {
             ForEach(store.routes.filter { shown.contains($0.id) }) { route in

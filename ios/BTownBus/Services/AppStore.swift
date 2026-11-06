@@ -39,8 +39,8 @@ final class AppStore {
 
     private(set) var routeByKey: [TransitKey: TransitRoute] = [:]
     private(set) var stopByKey: [TransitKey: TransitStop] = [:]
-    /// IU and Bloomington Transit stops on the same pole, paired both ways. They show as one stop.
-    private(set) var partnerByKey: [TransitKey: TransitStop] = [:]
+    /// Stops that are really one stop, by each member's key. They show as one stop.
+    private(set) var groupByKey: [TransitKey: [TransitStop]] = [:]
     @ObservationIgnored private var pollTask: Task<Void, Never>?
     @ObservationIgnored private var lastWidgetNudge = Date.distantPast
     @ObservationIgnored private var nearbyCache: (origin: CLLocation, routes: Set<TransitKey>, limit: Int, result: [(stop: TransitStop, distance: CLLocationDistance)])?
@@ -93,16 +93,22 @@ final class AppStore {
 
     // MARK: Merged stops
 
-    func partner(of stop: TransitStop) -> TransitStop? { partnerByKey[stop.id] }
-    /// The stop plus its partner from the other agency, if they share a pole.
-    func members(of stop: TransitStop) -> [TransitStop] { [stop] + [partner(of: stop)].compactMap { $0 } }
+    /// The stop plus any others on the same spot: IU and BT stops on one pole, or the duplicate
+    /// IDs Bloomington Transit lists at one spot.
+    func members(of stop: TransitStop) -> [TransitStop] {
+        guard let group = groupByKey[stop.id] else { return [stop] }
+        return [stop] + group.filter { $0.id != stop.id }
+    }
+    /// The one stop that stands for its group, for a single map pin.
+    func representative(of stop: TransitStop) -> TransitStop { groupByKey[stop.id]?.first ?? stop }
     /// IU's names are the short campus ones ("Sample Gates"), so a merged stop goes by those.
     func placeName(_ stop: TransitStop) -> String {
-        if stop.agency != .iu, let partner = partner(of: stop), partner.agency == .iu { return partner.name }
-        return stop.name
+        groupByKey[stop.id]?.first(where: { $0.agency == .iu })?.name ?? stop.name
     }
     func routes(at stop: TransitStop) -> [TransitRoute] {
-        members(of: stop).flatMap { member in member.routeIds.compactMap { routeByKey[TransitKey(agency: member.agency, id: $0)] } }
+        var seen = Set<TransitKey>()
+        return members(of: stop).flatMap { member in member.routeIds.compactMap { routeByKey[TransitKey(agency: member.agency, id: $0)] } }
+            .filter { seen.insert($0.id).inserted }
     }
     /// Every bus due at the stop, both agencies.
     func arrivals(atPlace stop: TransitStop) -> [TransitArrival] {
@@ -113,20 +119,45 @@ final class AppStore {
         members(of: stop).allSatisfy { arrivalsLoadedFor.contains($0.id) }
     }
 
-    /// Pairs each stop with the other agency's nearest stop when both are within 15 m of each other.
-    /// Stops for the same street corner but the other direction sit 17 m or more apart, so they stay separate.
-    private static func pairStops(_ stops: [TransitStop]) -> [TransitKey: TransitStop] {
-        let iu = stops.filter { $0.agency == .iu }, bt = stops.filter { $0.agency == .bt }
-        func nearest(to stop: TransitStop, in pool: [TransitStop]) -> TransitStop? {
-            pool.map { ($0, $0.location.distance(from: stop.location)) }.filter { $0.1 <= 15 }.min { $0.1 < $1.1 }?.0
+    /// Groups stops that are really one stop:
+    /// - any two within 3 m (BT lists some poles under two IDs, each with different routes), and
+    /// - an IU and a BT stop that are each other's nearest within 15 m.
+    /// The same corner's stop for the other direction sits 16 m or more away, so it stays separate.
+    private static func groupStops(_ stops: [TransitStop]) -> [TransitKey: [TransitStop]] {
+        func meters(_ a: TransitStop, _ b: TransitStop) -> Double {
+            let lat = (a.coordinate.latitude + b.coordinate.latitude) / 2 * .pi / 180
+            let dx = (b.coordinate.longitude - a.coordinate.longitude) * cos(lat), dy = b.coordinate.latitude - a.coordinate.latitude
+            return (dx * dx + dy * dy).squareRoot() * 111_195
         }
-        var pairs: [TransitKey: TransitStop] = [:]
-        for stop in iu {
-            guard let match = nearest(to: stop, in: bt), nearest(to: match, in: iu)?.id == stop.id else { continue }
-            pairs[stop.id] = match
-            pairs[match.id] = stop
+        var parent = Array(stops.indices)
+        func root(_ i: Int) -> Int { var i = i; while parent[i] != i { parent[i] = parent[parent[i]]; i = parent[i] }; return i }
+        func join(_ a: Int, _ b: Int) { parent[root(a)] = root(b) }
+
+        let order = stops.indices.sorted { stops[$0].coordinate.latitude < stops[$1].coordinate.latitude }
+        let window = 15.0 / 111_195
+        for (n, i) in order.enumerated() {
+            for j in order[(n + 1)...] {
+                guard stops[j].coordinate.latitude - stops[i].coordinate.latitude <= window else { break }
+                if meters(stops[i], stops[j]) <= 3 { join(i, j) }
+            }
         }
-        return pairs
+        let iu = stops.indices.filter { stops[$0].agency == .iu }, bt = stops.indices.filter { stops[$0].agency == .bt }
+        func nearest(to i: Int, in pool: [Int]) -> Int? {
+            pool.map { ($0, meters(stops[i], stops[$0])) }.filter { $0.1 <= 15 }.min { $0.1 < $1.1 }?.0
+        }
+        for i in iu {
+            guard let match = nearest(to: i, in: bt), nearest(to: match, in: iu) == i else { continue }
+            join(i, match)
+        }
+
+        let groups = Dictionary(grouping: stops.indices, by: root).values.filter { $0.count > 1 }
+        var result: [TransitKey: [TransitStop]] = [:]
+        for group in groups {
+            // IU first (its name is used), then a stable order.
+            let members = group.map { stops[$0] }.sorted { ($0.agency == .iu ? 0 : 1, $0.stopId) < ($1.agency == .iu ? 0 : 1, $1.stopId) }
+            for member in members { result[member.id] = members }
+        }
+        return result
     }
 
     // MARK: Saved
@@ -251,7 +282,7 @@ final class AppStore {
             if mergedStops.map(\.id) != stops.map(\.id) {
                 stops = mergedStops
                 stopByKey = Dictionary(mergedStops.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-                partnerByKey = Self.pairStops(mergedStops)
+                groupByKey = Self.groupStops(mergedStops)
                 shareSavedStops()
                 nearbyCache = nil
             }
