@@ -259,6 +259,7 @@ final class AppStore {
             while !Task.isCancelled {
                 guard let self else { return }
                 await self.refresh(includeArrivals: true)
+                LocationService.shared.refreshIfStale()
                 try? await Task.sleep(for: .seconds(15))
             }
         }

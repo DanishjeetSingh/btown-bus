@@ -46,6 +46,14 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
         manager.requestLocation()
     }
 
+    /// iOS only sends a new position after you move about 8 m, so standing still (at your stop, say)
+    /// lets the last fix age until it counts as stale. Ask for one when it's getting old.
+    func refreshIfStale() {
+        guard isAuthorized else { return }
+        if let location, Date().timeIntervalSince(location.timestamp) < 45 { return }
+        manager.requestLocation()
+    }
+
     /// Walking directions need a precise position; ask for it just this once if it's off.
     func requestPreciseForWalking() {
         guard isApproximate else { return }
