@@ -136,6 +136,7 @@ private enum WidgetTheme {
     static let ink = adaptive(light: "#15130f", dark: "#fff4de")
     static let muted = adaptive(light: "#6b6356", dark: "#b3a893")
     static let surface = adaptive(light: "#fffdf7", dark: "#211e18")
+    static let chip = adaptive(light: "#f3e1bd", dark: "#2c2820")
     static let edge = adaptive(light: "#15130f", dark: "#000000")
 
     private static func adaptive(light: String, dark: String) -> Color {
@@ -147,78 +148,76 @@ struct SavedStopsView: View {
     @Environment(\.widgetFamily) private var family
     let entry: SavedStopsEntry
 
-    private var rowLimit: Int {
-        switch family {
-        case .systemSmall: return 2
-        case .systemMedium: return 3
-        default: return 7
-        }
-    }
     private var small: Bool { family == .systemSmall }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: small ? 8 : 6) {
-            header
+        VStack(alignment: .leading, spacing: 8) {
             if entry.rows.isEmpty {
                 Spacer(minLength: 0)
                 Text("Save stops or buses in B-Town Bus to see them here.")
                     .font(.system(size: 13, weight: .bold)).foregroundStyle(WidgetTheme.muted)
                 Spacer(minLength: 0)
             } else {
-                ForEach(Array(entry.rows.prefix(rowLimit).enumerated()), id: \.offset) { _, row in
-                    rowView(row)
+                // Names are never shrunk or cut off; a long one wraps to two lines,
+                // and only as many rows as fit are shown.
+                RowsThatFit(spacing: small ? 8 : 7) {
+                    ForEach(Array(entry.rows.prefix(10).enumerated()), id: \.offset) { _, row in
+                        rowView(row)
+                    }
                 }
-                Spacer(minLength: 0)
+                .frame(maxHeight: .infinity, alignment: .top)
                 if family == .systemLarge {
                     Text("Closest stop first · Tap a bus to track it")
                         .font(.system(size: 11, weight: .semibold)).foregroundStyle(WidgetTheme.muted)
                 }
             }
+            footer
         }
     }
 
-    private var header: some View {
-        HStack(spacing: 6) {
-            Text("B").font(.system(size: 11, weight: .black).width(.expanded)).foregroundStyle(Color.busYellow)
-                .frame(width: 18, height: 18).background(Color.busInk, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+    private var footer: some View {
+        HStack(spacing: 7) {
             if !small {
-                Text("SAVED").font(.system(size: 10, weight: .black)).tracking(0.8).foregroundStyle(WidgetTheme.muted)
+                Text("B").font(.system(size: 11, weight: .black).width(.expanded)).foregroundStyle(Color.busYellow)
+                    .frame(width: 20, height: 20).background(Color.busInk, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
             }
-            Spacer(minLength: 0)
             if entry.failed {
-                Image(systemName: "wifi.slash").font(.system(size: 10, weight: .bold)).foregroundStyle(WidgetTheme.muted)
+                Image(systemName: "wifi.slash").font(.system(size: 11, weight: .bold)).foregroundStyle(WidgetTheme.muted)
             }
             Text(updatedLabel)
-                .font(.system(size: 10, weight: .bold)).foregroundStyle(WidgetTheme.muted)
-                .lineLimit(1).minimumScaleFactor(0.8)
+                .font(.system(size: 11, weight: .bold)).foregroundStyle(WidgetTheme.muted)
+                .lineLimit(1)
+            Spacer(minLength: 0)
             Button(intent: RefreshSavedStopsIntent()) {
-                Image(systemName: "arrow.clockwise").font(.system(size: 11, weight: .black)).foregroundStyle(WidgetTheme.ink)
-                    .frame(width: 24, height: 24)
-                    .background(WidgetTheme.surface, in: Circle())
-                    .overlay(Circle().strokeBorder(WidgetTheme.edge, lineWidth: 1.5))
+                Image(systemName: "arrow.clockwise").font(.system(size: 15, weight: .black)).foregroundStyle(Color.busInk)
+                    .frame(width: 34, height: 34)
+                    .background(Color.busYellow, in: Circle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Refresh times")
         }
     }
 
     /// "Updated just now", "Updated 4 min ago".
     private var updatedLabel: String {
         let minutes = Int(entry.date.timeIntervalSince(entry.fetchedAt) / 60)
-        if minutes < 1 { return "Updated just now" }
-        return small ? "\(minutes)m ago" : "Updated \(minutes) min ago"
+        if minutes < 1 { return small ? "Just now" : "Updated just now" }
+        return small ? "\(minutes) min ago" : "Updated \(minutes) min ago"
     }
 
-    /// {stop}   [bus | time]  then 12
+    /// {stop}   [bus  time]  then 12
     @ViewBuilder private func rowView(_ row: SavedStopsEntry.Row) -> some View {
         let upcoming = row.buses.filter { $0.arrival > entry.date.addingTimeInterval(-30) }
         let next = upcoming.first
         let tracked = next.map { "\($0.agency):\($0.stopId):\($0.routeId)" == entry.tracking } ?? false
         let name = Text(row.showsName ? row.name : "")
-            .font(.system(size: small ? 13 : 15, weight: .heavy))
+            .font(.system(size: 14, weight: .heavy))
             .foregroundStyle(tracked ? Color.busInk : WidgetTheme.ink)
-            .lineLimit(1).minimumScaleFactor(0.75)
+            .lineLimit(2)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
         let times = HStack(spacing: 6) {
-            chip(next: next, route: row.route, tracked: tracked)
+            chip(next: next, route: row.route)
             if next != nil { then(upcoming.dropFirst().first, tracked: tracked) }
         }
         let content = Group {
@@ -227,11 +226,9 @@ struct SavedStopsView: View {
                     if row.showsName { name }
                     times
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 HStack(spacing: 10) {
                     name
-                    Spacer(minLength: 4)
                     times
                 }
             }
@@ -247,8 +244,8 @@ struct SavedStopsView: View {
         }
     }
 
-    /// The app's time chip: route color block, a divider, then the wait.
-    private func chip(next: SavedStopsEntry.Bus?, route: SavedStopsShare.Route?, tracked: Bool) -> some View {
+    /// Route color block, then the wait, on a soft pill. No outlines: at widget size they read as stray lines.
+    private func chip(next: SavedStopsEntry.Bus?, route: SavedStopsShare.Route?) -> some View {
         let label = next?.route ?? route?.shortName
         let hex = next?.colorHex ?? route?.colorHex ?? "#6b6356"
         return HStack(spacing: 0) {
@@ -260,14 +257,12 @@ struct SavedStopsView: View {
                     .padding(.horizontal, 7)
                     .frame(minWidth: 30, maxHeight: .infinity)
                     .background(Color(hex: hex))
-                Rectangle().fill(WidgetTheme.edge).frame(width: 1.5)
             }
             wait(next).lineLimit(1).fixedSize().padding(.horizontal, 8)
         }
         .frame(height: 28)
-        .background(WidgetTheme.surface)
+        .background(WidgetTheme.chip)
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(WidgetTheme.edge, lineWidth: tracked ? 2 : 1.5))
     }
 
     /// The bus after the coming one, as a quiet "then 12".
@@ -301,6 +296,35 @@ struct SavedStopsView: View {
         } else {
             Text(entry.failed ? "No data" : "None soon")
                 .font(.system(size: 12, weight: .bold)).foregroundStyle(WidgetTheme.muted)
+        }
+    }
+}
+
+/// Stacks rows top to bottom and leaves out any that wouldn't fit whole, so a row is never cut in half
+/// and long stop names can wrap instead of shrinking.
+private struct RowsThatFit: Layout {
+    var spacing: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? 300
+        let heights = subviews.map { $0.sizeThatFits(ProposedViewSize(width: width, height: nil)).height }
+        let natural = heights.reduce(0, +) + spacing * CGFloat(max(0, heights.count - 1))
+        return CGSize(width: width, height: min(natural, proposal.height ?? natural))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var y = bounds.minY
+        var full = false
+        for view in subviews {
+            let height = view.sizeThatFits(ProposedViewSize(width: bounds.width, height: nil)).height
+            if !full, y + height <= bounds.maxY + 0.5 {
+                view.place(at: CGPoint(x: bounds.minX, y: y), proposal: ProposedViewSize(width: bounds.width, height: height))
+                y += height + spacing
+            } else {
+                // Out of room: park the rest out of sight.
+                full = true
+                view.place(at: CGPoint(x: bounds.minX, y: bounds.maxY + 2000), proposal: ProposedViewSize(width: bounds.width, height: height))
+            }
         }
     }
 }
