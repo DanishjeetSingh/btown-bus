@@ -11,7 +11,9 @@ Records both live feeds around the clock, so arrival predictions can be trained 
 | Routes, stops, patterns (only when they change) | 6 h | `data/static/` |
 | Each time a bus leaves a stop | as it happens | `events/YYYY-MM-DD-left-stop.jsonl.gz` |
 
-The last one is the ground truth that predictions get graded against, and the only part that can't be rebuilt later, so it's kept even when raw data stops: raw snapshots stop being saved once `data/` reaches `BTOWN_BUDGET_GB` (2 by default), to stay inside a home-folder quota.
+The last one is the ground truth that predictions get graded against, and the only part that can't be rebuilt later, so it's kept even when raw data stops: raw snapshots stop being saved once `data/` reaches `BTOWN_BUDGET_GB` (2 by default, so it's safe in a home folder).
+
+`data/` and `events/` sit next to `collect.py` unless `BTOWN_DATA` / `BTOWN_EVENTS` say otherwise.
 
 Standard library only (Python 3.9+). Times in folder and file names are Bloomington local time.
 
@@ -22,13 +24,14 @@ python3 collect.py --once   # one round, to check it works
 python3 collect.py          # runs until killed; a second copy exits at once
 ```
 
-On the server it runs from cron, which also restarts it if it dies:
+On the server (`ash`, in `/data3/singhdan/btown-bus`) it runs from cron, which also restarts it if it dies. That disk isn't backed up, so the small stop events are copied to the home folder nightly:
 
 ```
-*/5 * * * * cd $HOME/btown-bus-collector && /usr/bin/python3 collect.py >> collector.log 2>&1
-@reboot cd $HOME/btown-bus-collector && /usr/bin/python3 collect.py >> collector.log 2>&1
+*/5 * * * * cd /data3/singhdan/btown-bus && BTOWN_BUDGET_GB=100 /usr/bin/python3 collect.py >> collector.log 2>&1
+@reboot cd /data3/singhdan/btown-bus && BTOWN_BUDGET_GB=100 /usr/bin/python3 collect.py >> collector.log 2>&1
+17 4 * * * mkdir -p $HOME/btown-bus-events && cp -u /data3/singhdan/btown-bus/events/*.gz $HOME/btown-bus-events/ 2>/dev/null
 ```
 
 `collector.log` gets a line per feed failure and an hourly count of what was saved. Settings: `BTOWN_DATA`, `BTOWN_EVENTS`, `BTOWN_BUDGET_GB`.
 
-To update the server copy: `scp collector/collect.py ash:btown-bus-collector/`, then `pkill -f "python3 collect.py"`; cron starts the new version within 5 minutes.
+To update the server copy: `scp collector/collect.py ash:/data3/singhdan/btown-bus/`, then stop the running one (`kill` the pid from `ps -u $USER -o pid,args | grep "[c]ollect.py"`); cron starts the new version within 5 minutes. Avoid `pkill -f` inside a remote command string that itself contains the pattern: it kills its own shell.

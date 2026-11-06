@@ -33,8 +33,9 @@ FEEDS = {
     "bt": "https://bloomingtontransit.etaspot.net/service.php",
     "iu": "https://iucbs.etaspot.net/service.php",
 }
-DATA_DIR = Path(os.environ.get("BTOWN_DATA", str(Path.home() / "btown-bus-collector" / "data")))
-EVENTS_DIR = Path(os.environ.get("BTOWN_EVENTS", str(Path.home() / "btown-bus-collector" / "events")))
+HERE = Path(__file__).resolve().parent
+DATA_DIR = Path(os.environ.get("BTOWN_DATA", str(HERE / "data")))
+EVENTS_DIR = Path(os.environ.get("BTOWN_EVENTS", str(HERE / "events")))
 BUDGET_BYTES = float(os.environ.get("BTOWN_BUDGET_GB", "2")) * 1e9
 LOCK = Path("/tmp/btown-bus-collector.lock")  # local disk; file locks on network drives aren't reliable
 LOCAL = ZoneInfo("America/Indiana/Indianapolis")
