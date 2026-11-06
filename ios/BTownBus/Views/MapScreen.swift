@@ -438,14 +438,18 @@ struct BusMarker: View {
     let heading: Double?
     let stale: Bool
     let tracked: Bool
-    @State private var pulse = false
 
     var body: some View {
         ZStack {
             if tracked {
+                // The pulse animates only the ring. A repeating withAnimation here would also animate the
+                // marker's position forever, which made the tracked bus slide around the map.
                 Circle().stroke(Color.busYellow, lineWidth: 4).frame(width: 46, height: 46)
-                    .scaleEffect(pulse ? 1.3 : 0.7).opacity(pulse ? 0 : 1)
-                    .onAppear { withAnimation(.easeOut(duration: 1.6).repeatForever(autoreverses: false)) { pulse = true } }
+                    .phaseAnimator([false, true]) { ring, expanded in
+                        ring.scaleEffect(expanded ? 1.3 : 0.7).opacity(expanded ? 0 : 1)
+                    } animation: { expanded in
+                        expanded ? .easeOut(duration: 1.6) : nil
+                    }
             }
             if let heading {
                 Triangle().fill(Color.busInk).frame(width: 16, height: 11).offset(y: -24).rotationEffect(.degrees(heading))

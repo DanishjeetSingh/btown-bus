@@ -10,7 +10,8 @@ struct StopDetailView: View {
     @State private var trackTarget: TransitArrival?
     /// Buses picked with the chips, just for this look at the stop. Empty shows every bus.
     @State private var filter: Set<TransitKey> = []
-    @State private var editingSaved = false
+    /// The buses to put in the save sheet when it opens, or nil while it's closed.
+    @State private var saving: Set<TransitKey>?
 
     var body: some View {
         let all = store.arrivals(atPlace: stop)
@@ -21,7 +22,7 @@ struct StopDetailView: View {
             VStack(alignment: .leading, spacing: 14) {
                 header
                 HStack(spacing: 8) {
-                    FavoriteToggle(stop: stop, filter: filter) { editingSaved = true }
+                    FavoriteToggle(stop: stop, filter: filter) { saving = $0 }
                     Button { showWalking = true } label: {
                         Label(here ? "Map" : "Walk here", systemImage: here ? "map" : "figure.walk")
                             .font(.system(size: 15, weight: .black)).foregroundStyle(Theme.ink)
@@ -30,7 +31,8 @@ struct StopDetailView: View {
                     }
                     .buttonStyle(PressStyle())
                 }
-                BusFilter(routes: store.routes(at: stop), filter: $filter)
+                SavedNote(stop: stop, filter: $filter) { saving = $0 }
+                BusFilter(routes: store.routes(at: stop), filter: $filter, saved: store.isFavorite(stop))
                 walkStrip(here: here, walk: walk)
                 if let first = arrivals.first, let plan = TripMath.leavePlan(busArrival: first.predictedArrival, walkSeconds: walk, atStop: here) {
                     LeaveCard(arrival: first, route: store.route(first.routeKey), plan: plan)
@@ -60,9 +62,9 @@ struct StopDetailView: View {
                 .presentationDragIndicator(.visible)
                 .presentationBackground(Theme.surface)
         }
-        .sheet(isPresented: $editingSaved) {
-            SavedStopSheet(stop: stop)
-                .presentationDetents([.medium, .large])
+        .sheet(isPresented: Binding(get: { saving != nil }, set: { if !$0 { saving = nil } })) {
+            SaveStopSheet(stop: stop, initial: saving ?? [])
+                .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(Theme.surface)
         }
@@ -121,31 +123,83 @@ struct StopDetailView: View {
     }
 }
 
-/// Saves the stop (with the buses picked in the filter, if any). Once saved, opens the saved stop's settings.
+/// "6", "6 and E", "6, E and 9".
+func busList(_ routes: [TransitRoute]) -> String {
+    let names = routes.map(\.shortName)
+    guard names.count > 1 else { return names.first ?? "" }
+    return names.dropLast().joined(separator: ", ") + " and " + names.last!
+}
+
+/// Opens the save sheet, which shows exactly what's being saved before anything is.
 struct FavoriteToggle: View {
     @Environment(AppStore.self) private var store
     let stop: TransitStop
     var filter: Set<TransitKey> = []
-    let edit: () -> Void
+    let open: (Set<TransitKey>) -> Void
 
     var body: some View {
         let entry = store.savedEntry(for: stop)
         let routes = store.routes(at: stop)
-        let picked = routes.filter { filter.contains($0.id) }
+        let picked = Set(routes.map(\.id)).intersection(filter)
+        // Picking buses at a saved stop that differ from what's saved offers to update the save.
+        let differs = entry != nil && !picked.isEmpty && picked != Set(entry?.routes ?? [])
+        let title = entry == nil ? (picked.isEmpty ? "Save stop" : "Save these buses") : differs ? "Update saved buses" : "Saved"
         Button {
-            if entry != nil { edit(); return }
-            withAnimation(.spring(duration: 0.25)) { store.saveStop(stop, routes: picked.map(\.id)) }
+            open(entry == nil || differs ? picked : Set(entry?.routes ?? []))
         } label: {
-            Label(entry != nil ? "Saved" : picked.isEmpty ? "Save stop" : "Save \(picked.map(\.shortName).joined(separator: " + "))",
-                  systemImage: entry != nil ? "star.fill" : "star")
+            Label(title, systemImage: entry != nil ? "star.fill" : "star")
                 .font(.system(size: 15, weight: .black)).lineLimit(1).minimumScaleFactor(0.7)
-                .foregroundStyle(entry != nil ? Color.busInk : Theme.ink)
+                .foregroundStyle(entry != nil && !differs ? Color.busInk : Theme.ink)
                 .padding(.horizontal, 8)
                 .frame(maxWidth: .infinity).frame(height: 46)
-                .chunky(fill: entry != nil ? .busYellow : Theme.soft, radius: 15, lift: 2)
+                .chunky(fill: entry != nil && !differs ? .busYellow : Theme.soft, radius: 15, lift: 2)
         }
         .buttonStyle(PressStyle())
-        .sensoryFeedback(.impact, trigger: entry != nil)
+    }
+}
+
+/// At a stop saved for only some buses, says so, since the page itself always shows every bus.
+struct SavedNote: View {
+    @Environment(AppStore.self) private var store
+    let stop: TransitStop
+    @Binding var filter: Set<TransitKey>
+    let change: (Set<TransitKey>) -> Void
+
+    var body: some View {
+        if let entry = store.savedEntry(for: stop), !entry.routes.isEmpty {
+            let saved = Set(entry.routes)
+            let routes = store.routes(at: stop).filter { saved.contains($0.id) }
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: "star.fill").font(.system(size: 15, weight: .black)).foregroundStyle(Color.busInk)
+                        .frame(width: 30, height: 30).background(Color.busYellow, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Saved for just the \(busList(routes))").font(.system(size: 15, weight: .heavy)).foregroundStyle(Theme.ink)
+                        Text("Your Saved tab and widget only show \(routes.count == 1 ? "this bus" : "these buses") here.")
+                            .font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.muted)
+                    }
+                }
+                HStack(spacing: 8) {
+                    if filter != saved {
+                        smallButton("Show only \(routes.count == 1 ? "it" : "these")") { withAnimation(.spring(duration: 0.25)) { filter = saved } }
+                    }
+                    smallButton("Change") { change(saved) }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(14)
+            .background(Color.busYellow.opacity(0.18), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Color.busYellow, lineWidth: 2))
+        }
+    }
+
+    private func smallButton(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title).font(.system(size: 13, weight: .black)).foregroundStyle(Theme.ink)
+                .padding(.horizontal, 12).frame(height: 34)
+                .chunky(fill: Theme.surface, radius: 11, lift: 2)
+        }
+        .buttonStyle(PressStyle())
     }
 }
 
@@ -153,6 +207,7 @@ struct FavoriteToggle: View {
 struct BusFilter: View {
     let routes: [TransitRoute]
     @Binding var filter: Set<TransitKey>
+    var saved = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -176,9 +231,8 @@ struct BusFilter: View {
                     .sensoryFeedback(.selection, trigger: on)
                 }
             }
-            if filter.isEmpty {
-                Text("Tap buses to see only those.").font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.muted)
-            }
+            Text(filter.isEmpty ? "Tap buses to see only those." : saved ? "Showing only these. Tap Update saved buses to keep this." : "Showing only these. Tap Save these buses to keep this.")
+                .font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.muted)
         }
         .padding(14)
         .background(Theme.soft, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -198,48 +252,92 @@ struct RouteChip: View {
     }
 }
 
-/// A saved stop's settings: which buses show on the Saved tab and widget, or remove it.
-struct SavedStopSheet: View {
+/// Shows what's about to be saved (every bus, or just some) and lets you adjust it before saving.
+/// For a stop that's already saved, the same sheet changes or removes it.
+struct SaveStopSheet: View {
     @Environment(AppStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     let stop: TransitStop
+    @State private var draft: Set<TransitKey>
+
+    init(stop: TransitStop, initial: Set<TransitKey>) {
+        self.stop = stop
+        _draft = State(initialValue: initial)
+    }
 
     var body: some View {
-        let picked = Set(store.savedEntry(for: stop)?.routes ?? [])
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("SAVED STOP").font(.system(size: 11.5, weight: .black)).tracking(1).foregroundStyle(Theme.muted)
-                    Text(store.placeName(stop)).font(Theme.display(26)).foregroundStyle(Theme.ink)
+        let entry = store.savedEntry(for: stop)
+        let routes = store.routes(at: stop)
+        let chosen = routes.filter { draft.contains($0.id) }
+        let changed = entry.map { Set($0.routes) != draft } ?? true
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(entry == nil ? "SAVE THIS STOP" : "YOUR SAVED STOP").font(.system(size: 11.5, weight: .black)).tracking(1).foregroundStyle(Theme.muted)
+                        Text(store.placeName(stop)).font(Theme.display(26)).foregroundStyle(Theme.ink)
+                    }
+                    // What you're saving, in plain words.
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(entry == nil || changed ? "YOU'RE SAVING" : "SAVED").font(.system(size: 11, weight: .black)).tracking(0.8).foregroundStyle(Color.busInk.opacity(0.7))
+                        if chosen.isEmpty {
+                            Text("Every bus at this stop").font(.system(size: 17, weight: .heavy)).foregroundStyle(Color.busInk)
+                        } else {
+                            FlowRow(spacing: 6) { ForEach(chosen) { RouteChip(route: $0) } }
+                            Text("Only \(chosen.count == 1 ? "this bus" : "these buses") will show on your Saved tab and widget.")
+                                .font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.busInk.opacity(0.8))
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(14)
+                    .chunky(fill: .busYellow, radius: 18, lift: 3)
+
+                    Text("Pick the buses you ride from here, or keep every bus.")
+                        .font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.muted)
+                    choice(title: "Every bus", subtitle: "All \(routes.count) that stop here", route: nil, on: draft.isEmpty) { draft = [] }
+                    ForEach(routes) { route in
+                        choice(title: route.longName, subtitle: route.agency.name, route: route, on: draft.contains(route.id)) {
+                            if draft.contains(route.id) { draft.remove(route.id) } else { draft.insert(route.id) }
+                        }
+                    }
                 }
-                Text("Which buses show on your Saved tab and widget. The stop's page always shows every bus.")
-                    .font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.muted)
-                choice(title: "Every bus", detail: nil, on: picked.isEmpty) { store.saveStop(stop, routes: []) }
-                ForEach(store.routes(at: stop)) { route in
-                    choice(title: route.longName, detail: route, on: picked.contains(route.id)) { store.toggleSavedRoute(route.id, at: stop) }
-                }
+                .padding(20)
+            }
+            VStack(spacing: 10) {
                 Button {
-                    store.toggleFavorite(stop)
+                    store.saveStop(stop, routes: routes.map(\.id).filter { draft.contains($0) })
                     dismiss()
                 } label: {
-                    Label("Remove from saved", systemImage: "star.slash")
-                        .font(.system(size: 16, weight: .black)).foregroundStyle(.white)
-                        .frame(maxWidth: .infinity).frame(height: 50)
-                        .chunky(fill: Theme.warn, radius: 15, lift: 2)
+                    Text(entry == nil ? (chosen.isEmpty ? "Save with every bus" : "Save with the \(busList(chosen))") : changed ? "Save changes" : "Done")
+                        .font(.system(size: 17, weight: .black)).foregroundStyle(Color.busInk).lineLimit(1).minimumScaleFactor(0.7)
+                        .frame(maxWidth: .infinity).frame(height: 54)
+                        .chunky(fill: .busYellow, radius: 16)
                 }
                 .buttonStyle(PressStyle())
-                .padding(.top, 6)
+                if entry != nil {
+                    Button(role: .destructive) {
+                        store.toggleFavorite(stop)
+                        dismiss()
+                    } label: {
+                        Text("Remove from saved").font(.system(size: 15, weight: .heavy)).foregroundStyle(Theme.warn)
+                            .frame(maxWidth: .infinity).frame(height: 40)
+                    }
+                }
             }
-            .padding(20)
+            .padding(.horizontal, 20).padding(.top, 10).padding(.bottom, 16)
+            .background(Theme.surface)
         }
     }
 
-    private func choice(title: String, detail route: TransitRoute?, on: Bool, action: @escaping () -> Void) -> some View {
+    private func choice(title: String, subtitle: String, route: TransitRoute?, on: Bool, action: @escaping () -> Void) -> some View {
         Button { withAnimation(.spring(duration: 0.2)) { action() } } label: {
             HStack(spacing: 12) {
                 if let route { RouteTag(name: route.shortName, hex: route.colorHex, size: 38) }
                 else { Image(systemName: "bus.fill").font(.system(size: 17, weight: .bold)).frame(width: 38, height: 38) }
-                Text(title).font(.system(size: 15, weight: .heavy)).lineLimit(1)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title).font(.system(size: 15, weight: .heavy)).lineLimit(1)
+                    Text(subtitle).font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.muted).lineLimit(1)
+                }
                 Spacer()
                 Image(systemName: on ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 22, weight: .bold))
