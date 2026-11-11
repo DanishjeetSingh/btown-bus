@@ -34,6 +34,12 @@ The collector (`collector/`) has been recording both feeds on `ash` since 2026-1
 5. **Use the spread, not just the average.** Arrival ranges ("5–8 min"), a leave time that catches the bus 9 times out of 10, reliability notes ("the 6 runs ~3 min late around 5 PM"), and spotting ghost buses that aren't moving.
 6. **Version 2, only if version 1 proves out.** Adjust live when the last few buses through a stretch were slower than usual. Needs the server publishing every minute.
 
+## gork (OpenClaw agent) integration
+
+- A tool gork can call for "when should I leave for work?" (live buses, walk times, and ride times from the prediction model).
+- A weekday job where gork messages me when to leave.
+- A "track this bus" link gork can send: a URL B-Town Bus handles, plus an https redirect page on the website so chat apps make it tappable. Starting with no tap needs a paid account (push).
+
 ## Maybe later
 
 - Sharing with friends: SideStore, with a GitHub-hosted `.ipa` and source file for one-tap updates.
