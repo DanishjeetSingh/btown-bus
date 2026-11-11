@@ -1,7 +1,9 @@
 #!/bin/zsh
 # Re-sign B-Town Bus with the free Apple ID and reinstall it on the iPhone.
-# Run by hand, or every few days by the launchd agent (scripts/me.singhdan.btownbus.renew.plist).
-# Works over USB or Wi-Fi as long as the phone is reachable and unlocked.
+# Run by hand, or by the launchd agent (scripts/me.singhdan.btownbus.renew.plist) every 15 minutes and
+# whenever the Mac changes networks, so it catches the phone and Mac on the same Wi-Fi.
+# Works over USB or Wi-Fi as long as the phone is reachable and unlocked. Networks like eduroam keep
+# devices from seeing each other, so wireless renewals happen at home.
 # The agent runs from a copy at ~/Developer/btown-bus-renew (macOS blocks background jobs from
 # ~/Documents) and pulls the latest main from GitHub before building.
 set -u
@@ -17,18 +19,26 @@ notify() { osascript -e "display notification \"$2\" with title \"$1\"" 2>/dev/n
 expiry_of() { security cms -D -i "$APP/embedded.mobileprovision" 2>/dev/null | plutil -extract ExpirationDate raw -o - - 2>/dev/null; }
 seconds_left() { print $(( $(date -j -u -f '%Y-%m-%dT%H:%M:%SZ' "$1" +%s 2>/dev/null || print 0) - $(date +%s) )); }
 
-git -C "$REPO" pull -q --ff-only 2>/dev/null || log "couldn't update from GitHub, building what's here"
-cd "$REPO/ios" || exit 1
+WARNED=~/Library/Logs/btown-bus/last-warning
 
 installed=$(cat "$STATE" 2>/dev/null)
-if [[ -n $installed && ${1:-} != --force ]] && (( $(seconds_left "$installed") > 3 * 86400 )); then
-  log "phone's copy is good until $installed, skipping"; exit 0
-fi
+# Runs every 15 minutes, so stay quiet (and offline) until the last 3 days.
+if [[ -n $installed && ${1:-} != --force ]] && (( $(seconds_left "$installed") > 3 * 86400 )); then exit 0; fi
 
 # Note "unavailable" contains "available", so match the reachable states exactly.
 if ! xcrun devicectl list devices 2>/dev/null | grep "$DEVICE" | grep -qE "available \(paired\)|connected"; then
-  log "iPhone not reachable, will retry later"; exit 0
+  log "iPhone not reachable, will retry later"
+  # In the last day, nudge every 4 hours so it doesn't quietly expire.
+  last=$(cat "$WARNED" 2>/dev/null || print 0)
+  if [[ -n $installed ]] && (( $(seconds_left "$installed") < 86400 && $(date +%s) - last > 4 * 3600 )); then
+    date +%s > "$WARNED"
+    notify "B-Town Bus expires soon" "Unlock your iPhone on the same Wi-Fi as this Mac (not eduroam), or plug it in."
+  fi
+  exit 0
 fi
+
+git -C "$REPO" pull -q --ff-only 2>/dev/null || log "couldn't update from GitHub, building what's here"
+cd "$REPO/ios" || exit 1
 
 built=$(expiry_of)
 # A build from an earlier run that never got installed and still has days left only needs installing.

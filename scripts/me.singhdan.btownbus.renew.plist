@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>me.singhdan.btownbus.renew</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Users/danishjeetsingh/Developer/btown-bus-renew/scripts/renew-ios.sh</string>
+	</array>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>PATH</key>
+		<string>/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin</string>
+	</dict>
+	<!-- Every 15 minutes; the script exits at once unless the phone's copy is in its last 3 days. -->
+	<key>StartInterval</key>
+	<integer>900</integer>
+	<!-- Also when the Mac changes networks (say, getting home), the likeliest time to see the phone over Wi-Fi. -->
+	<key>WatchPaths</key>
+	<array>
+		<string>/Library/Preferences/SystemConfiguration</string>
+	</array>
+	<key>ThrottleInterval</key>
+	<integer>60</integer>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>StandardOutPath</key>
+	<string>/Users/danishjeetsingh/Library/Logs/btown-bus/renew.log</string>
+	<key>StandardErrorPath</key>
+	<string>/Users/danishjeetsingh/Library/Logs/btown-bus/renew.log</string>
+</dict>
+</plist>
