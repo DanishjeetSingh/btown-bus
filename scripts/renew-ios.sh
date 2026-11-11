@@ -25,7 +25,8 @@ if [[ -n $installed && ${1:-} != --force ]] && (( $(seconds_left "$installed") >
   log "phone's copy is good until $installed, skipping"; exit 0
 fi
 
-if ! xcrun devicectl list devices 2>/dev/null | grep "$DEVICE" | grep -qE "available|connected"; then
+# Note "unavailable" contains "available", so match the reachable states exactly.
+if ! xcrun devicectl list devices 2>/dev/null | grep "$DEVICE" | grep -qE "available \(paired\)|connected"; then
   log "iPhone not reachable, will retry later"; exit 0
 fi
 
