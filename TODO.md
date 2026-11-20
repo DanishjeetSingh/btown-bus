@@ -23,6 +23,16 @@ Items 1 and 2 are in `AppStore.swift` on the `codex/ios-ride-mode` branch (built
 4. While tracking, poll every 30–60 s and use coarse GPS until the bus or the stop is close.
 5. Only update the Live Activity when something visible changes, plus about once a minute so it doesn't go stale.
 
+## Fixes and features from real use (iOS)
+
+- **Go somewhere:** type a place (a restaurant, an address) and get the stop to walk to, which buses go there, and where to get off. If two or three of those buses come close together, track them all.
+- **Saved places:** home, work and the like, so from anywhere it can say the fastest way back.
+- **Ride mode:** notice (or ask) when I've boarded, follow the bus closely, and tell me when to request my stop. Matters most after dark.
+- **Walking without walking mode:** if I'm tracking and already heading to the stop, the Live Activity shouldn't still say "Leave now".
+- **Walking guidance:** directions seem off (driving-like?) and don't cope with starting inside a building. Check it's really using walking routes.
+- **Walking mode performance:** it lags, and the you + bus button doesn't fit both on screen.
+- **Remove crowding** from the bus details. It isn't accurate enough to be useful.
+
 ## Our own arrival predictions
 
 The collector (`collector/`) has been recording both feeds on `ash` since 2026-11-06. Start around 2026-11-20, once there are two weeks of data.
