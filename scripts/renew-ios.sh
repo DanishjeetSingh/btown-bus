@@ -56,7 +56,12 @@ if [[ -z $built || $built == "$installed" || ${1:-} == --force ]] || (( $(second
     mv "$aside"/*.mobileprovision(N) "$PROFILES"/ 2>/dev/null
     if print -r -- "$output" | grep -q "No Accounts"; then
       log "Xcode is signed out of the Apple ID; can't renew"
-      notify "B-Town Bus can't renew" "Xcode is signed out. Open Xcode → Settings → Accounts and sign in."
+      # This runs every 15 minutes, so say it at most twice a day.
+      last=$(cat "$WARNED" 2>/dev/null || print 0)
+      if (( $(date +%s) - last > 12 * 3600 )); then
+        date +%s > "$WARNED"
+        notify "B-Town Bus can't renew" "Xcode is signed out. Open Xcode → Settings → Accounts and sign in."
+      fi
     else
       log "build failed: $(print -r -- "$output" | grep -m1 error:)"
       notify "B-Town Bus can't renew" "The build failed. See ~/Library/Logs/btown-bus/renew.log."
